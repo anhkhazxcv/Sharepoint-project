@@ -1,0 +1,67 @@
+.card {
+  background: #ffffff;
+  border: 1px solid #d9e2ec;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+  padding: 18px;
+}
+
+.header {
+  margin-bottom: 16px;
+}
+
+.title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #103b66;
+}
+
+.description {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.printButton,
+.confirmButton {
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled {
+    background: #d5dde7;
+    color: #7b8794;
+    cursor: not-allowed;
+  }
+}
+
+.printButton {
+  background: #0f4c81;
+  color: #ffffff;
+}
+
+.confirmButton {
+  background: #1f8f4d;
+  color: #ffffff;
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 16px;
+  }
+
+  .actions {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,28 @@
+.badge {
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #edf5ff;
+  border: 1px solid #c9def7;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #48627e;
+}
+
+.value {
+  font-size: 13px;
+  color: #123456;
+}
+
+@media (max-width: 640px) {
+  .badge {
+    white-space: normal;
+  }
+}

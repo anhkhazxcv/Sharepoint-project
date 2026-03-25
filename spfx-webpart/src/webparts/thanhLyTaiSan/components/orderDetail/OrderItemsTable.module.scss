@@ -1,0 +1,112 @@
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+
+  th,
+  td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+    vertical-align: middle;
+  }
+
+  th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  tbody tr {
+    background: #ffffff;
+    transition: background-color 0.2s ease;
+  }
+
+  tbody tr:hover {
+    background: #f8fbff;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+}
+
+.selectedRow {
+  background: #eef6ff !important;
+}
+
+.thumbnailWrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #d8e0ea;
+  background: #f8fafc;
+}
+
+.thumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.primaryText {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+.secondaryText {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.amountCell {
+  font-weight: 700;
+  color: #103b66;
+}
+
+.emptyState {
+  min-height: 180px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+@media (max-width: 640px) {
+  .tableWrap {
+    margin-left: -4px;
+    margin-right: -4px;
+    border-radius: 8px;
+  }
+
+  .table {
+    min-width: 680px;
+  }
+
+  .table th,
+  .table td {
+    padding: 12px 14px;
+  }
+
+  .thumbnailWrap {
+    width: 48px;
+    height: 48px;
+  }
+}

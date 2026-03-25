@@ -1,0 +1,43 @@
+.card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  padding: 20px 22px;
+  background: #ffffff;
+  border: 1px solid #d9e2ec;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+  margin-bottom: 20px;
+}
+
+.item {
+  min-width: 0;
+}
+
+.label {
+  display: block;
+  margin-bottom: 8px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.value,
+.valueAccent {
+  display: block;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.valueAccent {
+  color: #0f4c81;
+}
+
+@media (max-width: 768px) {
+  .card {
+    grid-template-columns: 1fr;
+    padding: 16px;
+    gap: 14px;
+  }
+}
