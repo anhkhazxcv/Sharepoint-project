@@ -69,12 +69,12 @@ function createQrPlaceholder(): string {
 export var mockOrderDetail: IOrderDetail = {
   orderId: 'order-1',
   orderCode: 'DH-2024-0001',
-  buyerName: 'Nguyễn Văn A',
+  buyerName: 'Nguyen Van A',
   purchaseDate: '2024-11-12T08:30:00',
   totalAmount: 21000000,
   currentStep: 'Thanh toán',
-  paymentStatus: 'Chờ xác nhận',
-  handoverStatus: 'Chưa bàn giao',
+  paymentStatus: 'Cho xac nhan',
+  handoverStatus: 'Chua ban giao',
   bankAccount: {
     bankName: 'Vietcombank',
     accountName: 'BANH HAN',
@@ -89,51 +89,16 @@ export var mockOrderDetail: IOrderDetail = {
   items: [
     {
       id: 'item-1',
+      assetId: '1',
       assetCode: 'TS001',
       assetName: 'Laptop Dell XPS 13',
-      condition: 'Mới',
-      site: 'Hà Nội',
+      condition: 'Moi',
+      site: 'Ha Noi',
       quantity: 1,
       unitPrice: 15000000,
       amount: 15000000,
       imageUrl: createAssetImage('Dell XPS', '#1d4ed8', '#e7f0ff'),
       barcode: '893850100001'
-    },
-    {
-      id: 'item-2',
-      assetCode: 'TS002',
-      assetName: 'Màn hình Dell 24 inch',
-      condition: 'Đã qua sử dụng',
-      site: 'Hà Nội',
-      quantity: 1,
-      unitPrice: 3000000,
-      amount: 3000000,
-      imageUrl: createAssetImage('Dell 24', '#0369a1', '#e6f7fb'),
-      barcode: '893850100002'
-    },
-    {
-      id: 'item-3',
-      assetCode: 'TS003',
-      assetName: 'Ghế xoay văn phòng',
-      condition: 'Đã qua sử dụng',
-      site: 'Hà Nội',
-      quantity: 1,
-      unitPrice: 500000,
-      amount: 500000,
-      imageUrl: createAssetImage('Chair', '#0f766e', '#e6f7f0'),
-      barcode: '893850100003'
-    },
-    {
-      id: 'item-4',
-      assetCode: 'TS004',
-      assetName: 'Máy in HP Laser',
-      condition: 'Mới',
-      site: 'HCM',
-      quantity: 1,
-      unitPrice: 2500000,
-      amount: 2500000,
-      imageUrl: createAssetImage('HP Laser', '#b45309', '#fff4e5'),
-      barcode: '893850100004'
     }
   ]
 };
@@ -150,8 +115,8 @@ export function createOrderDetailFromPurchase(asset: IAssetItem, quantity: numbe
     purchaseDate: now.toISOString(),
     totalAmount: amount,
     currentStep: 'Thanh toán',
-    paymentStatus: 'Chờ xác nhận',
-    handoverStatus: 'Chưa bàn giao',
+    paymentStatus: 'Cho xac nhan',
+    handoverStatus: 'Chua ban giao',
     bankAccount: {
       bankName: 'Vietcombank',
       accountName: 'BANH HAN',
@@ -166,6 +131,7 @@ export function createOrderDetailFromPurchase(asset: IAssetItem, quantity: numbe
     items: [
       {
         id: 'item-' + String(orderIndex) + '-1',
+        assetId: asset.id,
         assetCode: asset.assetCode,
         assetName: asset.assetName,
         condition: asset.condition,

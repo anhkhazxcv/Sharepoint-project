@@ -6,7 +6,11 @@ import styles from './ThanhLyTaiSan.module.scss';
 export default function ThanhLyTaiSan(props: IThanhLyTaiSanProps): React.ReactElement<IThanhLyTaiSanProps> {
   return (
     <section className={`${styles.thanhLyTaiSan} ${props.hasTeamsContext ? styles.teams : ''}`}>
-      <OrderWorkspace userDisplayName={props.userDisplayName} />
+      <OrderWorkspace
+        userDisplayName={props.userDisplayName}
+        userEmail={props.userEmail}
+        spHttpClient={props.spHttpClient}
+      />
     </section>
   );
 }

@@ -1,14 +1,19 @@
 import * as React from 'react';
+import type { SPHttpClient } from '@microsoft/sp-http';
 import { AssetGrid } from './AssetGrid';
 import { FilterBar } from './FilterBar';
-import { MOCK_ASSETS, PURCHASE_LIMIT, USER_DISPLAY_NAME } from './mockData';
 import type { IPurchasePayload, IAssetFilters, IAssetItem } from './types';
 import { createOrderDetailFromPurchase } from './orderDetail/mockOrderDetail';
 import type { IOrderDetail } from './orderDetail/types';
+import { getAssetsFromSharePoint } from './services/assetCatalogService';
+import { createTransactionItem } from './services/orderTransactionService';
 import styles from './AssetLiquidationPage.module.scss';
 
 export interface IAssetLiquidationPageProps {
   userDisplayName?: string;
+  userEmail: string;
+  spHttpClient: SPHttpClient;
+  onAssetsLoaded?: (items: IAssetItem[]) => void;
   onPurchaseSuccess?: (orderDetail: IOrderDetail) => void;
 }
 
@@ -18,22 +23,28 @@ const defaultFilters: IAssetFilters = {
   site: ''
 };
 
+const PAGE_SIZE_OPTIONS: number[] = [10, 20, 50];
+const SHAREPOINT_SITE_URL: string = 'https://masterisegroup.sharepoint.com';
+const SHAREPOINT_LIST_TITLE: string = 'lstDanhMucTaiSan';
+const PURCHASE_LIMIT: number = 5;
+const MAX_SHAREPOINT_RETRIES: number = 5;
+
 function stripVietnamese(input: string): string {
   return input
     .replace(/[àáạảãâầấậẩẫăằắặẳẵ]/g, 'a')
-    .replace(/[ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴ]/g, 'a')
+    .replace(/[ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴ]/g, 'A')
     .replace(/[èéẹẻẽêềếệểễ]/g, 'e')
-    .replace(/[ÈÉẸẺẼÊỀẾỆỂỄ]/g, 'e')
+    .replace(/[ÈÉẸẺẼÊỀẾỆỂỄ]/g, 'E')
     .replace(/[ìíịỉĩ]/g, 'i')
-    .replace(/[ÌÍỊỈĨ]/g, 'i')
+    .replace(/[ÌÍỊỈĨ]/g, 'I')
     .replace(/[òóọỏõôồốộổỗơờớợởỡ]/g, 'o')
-    .replace(/[ÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠ]/g, 'o')
+    .replace(/[ÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠ]/g, 'O')
     .replace(/[ùúụủũưừứựửữ]/g, 'u')
-    .replace(/[ÙÚỤỦŨƯỪỨỰỬỮ]/g, 'u')
+    .replace(/[ÙÚỤỦŨƯỪỨỰỬỮ]/g, 'U')
     .replace(/[ỳýỵỷỹ]/g, 'y')
-    .replace(/[ỲÝỴỶỸ]/g, 'y')
+    .replace(/[ỲÝỴỶỸ]/g, 'Y')
     .replace(/[đ]/g, 'd')
-    .replace(/[Đ]/g, 'd');
+    .replace(/[Đ]/g, 'D');
 }
 
 function normalizeKeyword(value: string): string {
@@ -46,7 +57,7 @@ function getUniqueValues(items: IAssetItem[], key: keyof IAssetItem): string[] {
   items.forEach((item: IAssetItem) => {
     const value: string = String(item[key]);
 
-    if (results.indexOf(value) === -1) {
+    if (value && results.indexOf(value) === -1) {
       results.push(value);
     }
   });
@@ -54,24 +65,80 @@ function getUniqueValues(items: IAssetItem[], key: keyof IAssetItem): string[] {
   return results;
 }
 
-function getAssetStatusText(availableQuantity: number): string {
-  return availableQuantity > 0 ? 'Còn hàng' : 'Hết hàng';
-}
-
 export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.ReactElement {
-  const displayName: string = props.userDisplayName || USER_DISPLAY_NAME;
-  const [assets, setAssets] = React.useState<IAssetItem[]>(MOCK_ASSETS);
+  const displayName: string = props.userDisplayName || '';
+  const [assets, setAssets] = React.useState<IAssetItem[]>([]);
   const [filters, setFilters] = React.useState<IAssetFilters>(defaultFilters);
   const [searchValue, setSearchValue] = React.useState<string>('');
   const [quantityInputs, setQuantityInputs] = React.useState<Record<string, string>>({});
   const [quantityErrors, setQuantityErrors] = React.useState<Record<string, string>>({});
-  const [purchasedCount, setPurchasedCount] = React.useState<number>(2);
+  const [purchasedCount, setPurchasedCount] = React.useState<number>(0);
+  const [currentPage, setCurrentPage] = React.useState<number>(1);
+  const [pageSize, setPageSize] = React.useState<number>(PAGE_SIZE_OPTIONS[0]);
+  const [nextOrderIndex, setNextOrderIndex] = React.useState<number>(1);
+  const [isLoadingAssets, setIsLoadingAssets] = React.useState<boolean>(true);
+  const [assetLoadError, setAssetLoadError] = React.useState<string>('');
 
-  const categories: string[] = React.useMemo(() => getUniqueValues(MOCK_ASSETS, 'category'), []);
-  const conditions: string[] = React.useMemo(() => getUniqueValues(MOCK_ASSETS, 'condition'), []);
-  const sites: string[] = React.useMemo(() => getUniqueValues(MOCK_ASSETS, 'site'), []);
+  const categories: string[] = React.useMemo(() => getUniqueValues(assets, 'category'), [assets]);
+  const conditions: string[] = React.useMemo(() => getUniqueValues(assets, 'condition'), [assets]);
+  const sites: string[] = React.useMemo(() => getUniqueValues(assets, 'site'), [assets]);
 
   const remainingLimit: number = Math.max(PURCHASE_LIMIT - purchasedCount, 0);
+
+  React.useEffect(() => {
+    let isMounted: boolean = true;
+    var attemptCount: number = 0;
+
+    setIsLoadingAssets(true);
+    setAssetLoadError('');
+
+    function loadAssets(): void {
+      attemptCount += 1;
+
+      getAssetsFromSharePoint({
+        siteUrl: SHAREPOINT_SITE_URL,
+        listTitle: SHAREPOINT_LIST_TITLE,
+        spHttpClient: props.spHttpClient
+      })
+        .then((items: IAssetItem[]) => {
+          if (isMounted) {
+            // eslint-disable-next-line no-console
+            console.log('AssetLiquidationPage fetched assets:', items);
+            setAssets(items);
+            if (props.onAssetsLoaded) {
+              props.onAssetsLoaded(items);
+            }
+            setIsLoadingAssets(false);
+          }
+        })
+        .catch((error: Error) => {
+          if (!isMounted) {
+            return;
+          }
+
+          // eslint-disable-next-line no-console
+          console.error('AssetLiquidationPage fetch assets error, attempt ' + String(attemptCount) + ':', error);
+
+          if (attemptCount < MAX_SHAREPOINT_RETRIES) {
+            loadAssets();
+            return;
+          }
+
+          setAssets([]);
+          setAssetLoadError('Khong tai duoc du lieu SharePoint sau 5 lan. Vui long lien he doi IT Support.');
+          if (props.onAssetsLoaded) {
+            props.onAssetsLoaded([]);
+          }
+          setIsLoadingAssets(false);
+        });
+    }
+
+    loadAssets();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [props.spHttpClient]);
 
   const visibleAssets: IAssetItem[] = React.useMemo(() => {
     const keyword: string = normalizeKeyword(searchValue);
@@ -83,11 +150,28 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
       const matchesSearch: boolean =
         !keyword ||
         normalizeKeyword(asset.assetCode).indexOf(keyword) >= 0 ||
-        normalizeKeyword(asset.assetName).indexOf(keyword) >= 0;
+        normalizeKeyword(asset.assetName).indexOf(keyword) >= 0 ||
+        normalizeKeyword(asset.barcode).indexOf(keyword) >= 0;
 
       return matchesCategory && matchesCondition && matchesSite && matchesSearch;
     });
   }, [assets, filters, searchValue]);
+
+  const totalPages: number = Math.max(Math.ceil(visibleAssets.length / pageSize), 1);
+  const paginatedAssets: IAssetItem[] = React.useMemo(() => {
+    const startIndex: number = (currentPage - 1) * pageSize;
+    return visibleAssets.slice(startIndex, startIndex + pageSize);
+  }, [currentPage, pageSize, visibleAssets]);
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, searchValue, pageSize]);
+
+  React.useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const updateQuantityState = React.useCallback(
     (asset: IAssetItem, rawValue: string) => {
@@ -109,17 +193,17 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
       const parsedValue: number = Number(nextValue);
 
       if (parsedValue === 0) {
-        errorMessage = 'Số lượng mua phải lớn hơn 0.';
+        errorMessage = 'So luong mua phai lon hon 0.';
       }
 
       if (parsedValue > asset.availableQuantity) {
         nextValue = String(asset.availableQuantity);
-        errorMessage = `Số lượng tối đa là ${asset.availableQuantity}.`;
+        errorMessage = 'So luong toi da la ' + String(asset.availableQuantity) + '.';
       }
 
       if (Number(nextValue) > remainingLimit) {
         nextValue = String(remainingLimit);
-        errorMessage = `Bạn chỉ còn được mua ${remainingLimit} tài sản.`;
+        errorMessage = 'Ban chi con duoc mua ' + String(remainingLimit) + ' tai san.';
       }
 
       setQuantityInputs((prevState) => ({
@@ -164,8 +248,8 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
           ...prevState,
           [asset.id]:
             quantity > remainingLimit
-              ? `Bạn chỉ còn được mua ${remainingLimit} tài sản.`
-              : 'Vui lòng nhập số lượng hợp lệ.'
+              ? 'Ban chi con duoc mua ' + String(remainingLimit) + ' tai san.'
+              : 'Vui long nhap so luong hop le.'
         }));
         return;
       }
@@ -174,28 +258,13 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
         asset,
         quantity
       };
-      const nextOrder: IOrderDetail = createOrderDetailFromPurchase(
-        asset,
-        quantity,
-        displayName,
-        purchasedCount + 1
-      );
+      const nextOrder: IOrderDetail = createOrderDetailFromPurchase(asset, quantity, displayName, nextOrderIndex);
 
       // eslint-disable-next-line no-console
-      console.log('Đăng ký mua tài sản', payload);
+      console.log('Dang ky mua tai san', payload);
 
-      setAssets((prevState) =>
-        prevState.map((item: IAssetItem) =>
-          item.id === asset.id
-            ? {
-                ...item,
-                availableQuantity: item.availableQuantity - quantity,
-                statusText: getAssetStatusText(item.availableQuantity - quantity)
-              }
-            : item
-        )
-      );
       setPurchasedCount((prevState) => Math.min(prevState + quantity, PURCHASE_LIMIT));
+      setNextOrderIndex((prevState) => prevState + 1);
       setQuantityInputs((prevState) => ({
         ...prevState,
         [asset.id]: ''
@@ -205,27 +274,40 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
         [asset.id]: ''
       }));
 
-      if (typeof window !== 'undefined' && window.alert) {
-        window.alert('Đăng ký mua thành công');
-      }
+      createTransactionItem({
+        spHttpClient: props.spHttpClient,
+        buyerName: displayName,
+        buyerEmail: props.userEmail,
+        orderDetail: nextOrder
+      })
+        .then(() => {
+          if (typeof window !== 'undefined' && window.alert) {
+            window.alert('Dang ky mua thanh cong');
+          }
 
-      if (props.onPurchaseSuccess) {
-        props.onPurchaseSuccess(nextOrder);
-      }
+          if (props.onPurchaseSuccess) {
+            props.onPurchaseSuccess(nextOrder);
+          }
+        })
+        .catch((error: Error) => {
+          // eslint-disable-next-line no-console
+          console.error('Khong the luu giao dich vao SharePoint', error);
+          window.alert('Khong the tao don mua tren SharePoint.');
+        });
     },
-    [displayName, props, purchasedCount, quantityErrors, quantityInputs, remainingLimit]
+    [displayName, nextOrderIndex, props, quantityErrors, quantityInputs, remainingLimit]
   );
 
   return (
     <div className={styles.page}>
       <header className={styles.mainHeader}>
         <div className={styles.headerCenter}>
-          <div className={styles.headerSubTitle}>Hệ thống quản lý tài sản nội bộ</div>
-          <h1 className={styles.pageTitle}>Giao diện Đăng ký Mua Tài sản (CBNV)</h1>
+          <div className={styles.headerSubTitle}>He thong quan ly tai san noi bo</div>
+          <h1 className={styles.pageTitle}>Giao dien Dang ky Mua Tai san (CBNV)</h1>
         </div>
 
         <div className={styles.userPanel}>
-          <div className={styles.userText}>Cán bộ nhân viên: {displayName}</div>
+          <div className={styles.userText}>Can bo nhan vien: {displayName}</div>
           <div className={styles.avatar} aria-hidden="true">
             {displayName.charAt(0).toUpperCase()}
           </div>
@@ -234,12 +316,16 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
 
       <div className={styles.subHeader}>
         <div>
-          <strong className={styles.subHeaderTitle}>Danh sách tài sản thanh lý</strong>
+          <strong className={styles.subHeaderTitle}>Danh sach tai san thanh ly</strong>
           <span className={styles.subHeaderText}>
-            CBNV có thể tìm kiếm, lọc và đăng ký mua tài sản trên cùng một màn hình.
+            CBNV co the tim kiem, loc va dang ky mua tai san tren cung mot man hinh.
           </span>
+          <span className={styles.subHeaderText}>
+            Nguon du lieu: {SHAREPOINT_SITE_URL} / {SHAREPOINT_LIST_TITLE}
+          </span>
+          {!!assetLoadError && <span className={styles.loadError}>{assetLoadError}</span>}
         </div>
-        <div className={styles.summaryChip}>Tổng tài sản hiển thị: {visibleAssets.length}</div>
+        <div className={styles.summaryChip}>Tong tai san hien thi: {visibleAssets.length}</div>
       </div>
 
       <FilterBar
@@ -255,14 +341,66 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
       />
 
       <div className={styles.contentArea}>
-        <AssetGrid
-          assets={visibleAssets}
-          quantityInputs={quantityInputs}
-          errors={quantityErrors}
-          remainingLimit={remainingLimit}
-          onQuantityChange={handleQuantityChange}
-          onRegister={handleRegister}
-        />
+        {isLoadingAssets ? (
+          <div className={styles.loadingState}>Dang tai du lieu tu SharePoint...</div>
+        ) : (
+          <AssetGrid
+            assets={paginatedAssets}
+            quantityInputs={quantityInputs}
+            errors={quantityErrors}
+            remainingLimit={remainingLimit}
+            onQuantityChange={handleQuantityChange}
+            onRegister={handleRegister}
+          />
+        )}
+
+        {!isLoadingAssets && !!visibleAssets.length && (
+          <div className={styles.paginationBar}>
+            <div className={styles.paginationSummary}>
+              Hien thi {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, visibleAssets.length)} /{' '}
+              {visibleAssets.length} tai san
+            </div>
+
+            <div className={styles.paginationControls}>
+              <label className={styles.pageSizeControl}>
+                <span>So dong</span>
+                <select
+                  value={pageSize}
+                  onChange={(event) => setPageSize(Number(event.target.value))}
+                  className={styles.pageSizeSelect}
+                >
+                  {PAGE_SIZE_OPTIONS.map((option: number) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className={styles.pageNavigation}>
+                <button
+                  type="button"
+                  className={styles.pageButton}
+                  onClick={() => setCurrentPage((prevState) => Math.max(prevState - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  Truoc
+                </button>
+                <span className={styles.pageIndicator}>
+                  Trang {currentPage}/{totalPages}
+                </span>
+                <button
+                  type="button"
+                  className={styles.pageButton}
+                  onClick={() => setCurrentPage((prevState) => Math.min(prevState + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                >
+                  Sau
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

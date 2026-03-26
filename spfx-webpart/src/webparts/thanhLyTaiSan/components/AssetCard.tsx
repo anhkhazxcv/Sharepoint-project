@@ -36,6 +36,7 @@ function renderBarcodeBars(barcode: string): React.ReactNode {
 export function AssetCard(props: IAssetCardProps): React.ReactElement {
   const { asset, quantityValue, errorMessage, remainingLimit, onQuantityChange, onRegister } = props;
   const [isImageBroken, setIsImageBroken] = React.useState<boolean>(false);
+  const hasImage: boolean = !!asset.imageUrl;
 
   const isSoldOut: boolean = asset.availableQuantity === 0;
   const parsedQuantity: number = Number(quantityValue);
@@ -52,7 +53,7 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
     <article className={`${styles.card} ${isSoldOut ? styles.soldOutCard : ''}`}>
       <div className={styles.header}>
         <div className={styles.imageWrap}>
-          {isImageBroken ? (
+          {!hasImage || isImageBroken ? (
             <div className={styles.imageFallback}>Không có ảnh</div>
           ) : (
             <img
@@ -88,7 +89,7 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
 
           <div className={styles.metaGrid}>
             <div className={styles.infoLine}>
-              <span className={styles.label}>Số lượng tổng</span>
+              <span className={styles.label}>So luong tong</span>
               <strong className={styles.value}>{asset.totalQuantity}</strong>
             </div>
             <div className={styles.infoLine}>
@@ -100,7 +101,7 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
               <strong className={styles.value}>{asset.site}</strong>
             </div>
             <div className={styles.infoLine}>
-              <span className={styles.label}>Còn lại</span>
+              <span className={styles.label}>So luong ton</span>
               <strong className={styles.value}>{asset.availableQuantity}</strong>
             </div>
           </div>

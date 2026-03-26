@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { mockOrderDetail } from './mockOrderDetail';
 import { ProcessStepper } from './ProcessStepper';
 import { OrderSummaryCard } from './OrderSummaryCard';
 import { OrderItemsSection } from './OrderItemsSection';
@@ -12,14 +11,13 @@ import styles from './OrderDetailPage.module.scss';
 export interface IOrderDetailPageProps {
   orderDetail?: IOrderDetail;
   onBack?: () => void;
+  onConfirmPayment?: (orderId: string) => void;
+  onConfirmHandover?: (orderId: string) => void;
 }
 
 export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElement {
-  var orderDetail: IOrderDetail = props.orderDetail || mockOrderDetail;
   var loadingTimer = React.useRef<number | undefined>(undefined);
   var [isLoading, setIsLoading] = React.useState<boolean>(true);
-  var canRunHandoverActions: boolean =
-    orderDetail.currentStep === 'Bàn giao' || orderDetail.currentStep === 'Hoàn tất';
 
   React.useEffect(function () {
     loadingTimer.current = window.setTimeout(function () {
@@ -32,6 +30,18 @@ export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElemen
       }
     };
   }, []);
+
+  if (!props.orderDetail) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.skeletonTitle}>Khong co du lieu don hang.</div>
+      </div>
+    );
+  }
+
+  var orderDetail: IOrderDetail = props.orderDetail;
+  var canRunHandoverActions: boolean =
+    orderDetail.currentStep === 'Bàn giao' || orderDetail.currentStep === 'Hoàn tất';
 
   function showMockAction(message: string): void {
     // eslint-disable-next-line no-console
@@ -60,10 +70,10 @@ export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElemen
       <header className={styles.pageHeader}>
         {props.onBack && (
           <button type="button" className={styles.backButton} onClick={props.onBack}>
-            Quay lại danh sách đơn
+            Quay lai danh sach don
           </button>
         )}
-        <h1 className={styles.title}>Chi tiết Đơn hàng: {orderDetail.orderCode}</h1>
+        <h1 className={styles.title}>Chi tiet Don hang: {orderDetail.orderCode}</h1>
       </header>
 
       <OrderSummaryCard
@@ -78,13 +88,19 @@ export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElemen
             items={orderDetail.items}
             currentStep={orderDetail.currentStep}
             onConfirmPayment={function (): void {
-              showMockAction('Đã xác nhận thanh toán');
+              if (props.onConfirmPayment) {
+                props.onConfirmPayment(orderDetail.orderId);
+              }
+              showMockAction('Da xac nhan thanh toan va chuyen sang ban giao');
             }}
             onPay={function (): void {
-              showMockAction('Đã mở thao tác thanh toán');
+              showMockAction('Da hien thi STK phap nhan va QR thanh toan');
             }}
             onConfirmHandover={function (): void {
-              showMockAction('Đã xác nhận bàn giao');
+              if (props.onConfirmHandover) {
+                props.onConfirmHandover(orderDetail.orderId);
+              }
+              showMockAction('Da xac nhan ban giao tai san');
             }}
           />
 
@@ -92,10 +108,13 @@ export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElemen
             canPrint={canRunHandoverActions}
             canConfirm={orderDetail.currentStep === 'Bàn giao'}
             onPrintPdf={function (): void {
-              showMockAction('Đã tạo biên bản bàn giao PDF');
+              showMockAction('Da tao bien ban ban giao PDF');
             }}
             onConfirmHandover={function (): void {
-              showMockAction('Đã xác nhận bàn giao');
+              if (props.onConfirmHandover) {
+                props.onConfirmHandover(orderDetail.orderId);
+              }
+              showMockAction('Da xac nhan ban giao tai san');
             }}
           />
         </div>

@@ -29,7 +29,9 @@ export default class ThanhLyTaiSanWebPart extends BaseClientSideWebPart<IThanhLy
         isDarkTheme: this._isDarkTheme,
         environmentMessage: this._environmentMessage,
         hasTeamsContext: !!this.context.sdks.microsoftTeams,
-        userDisplayName: this.context.pageContext.user.displayName
+        userDisplayName: this.context.pageContext.user.displayName,
+        userEmail: this.context.pageContext.user.email,
+        spHttpClient: this.context.spHttpClient
       }
     );
 

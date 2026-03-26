@@ -87,6 +87,13 @@
   color: #5b6776;
 }
 
+.loadError {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #b91c1c;
+}
+
 .summaryChip {
   padding: 8px 12px;
   border-radius: 999px;
@@ -99,6 +106,90 @@
 
 .contentArea {
   padding: 20px 24px 28px;
+}
+
+.loadingState {
+  min-height: 240px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  font-size: 15px;
+}
+
+.paginationBar {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid #d6dee8;
+  border-radius: 12px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.paginationSummary {
+  font-size: 14px;
+  color: #475569;
+}
+
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.pageSizeControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #334155;
+}
+
+.pageSizeSelect {
+  min-width: 72px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.pageNavigation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pageButton {
+  min-width: 78px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f2f57;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pageButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.pageIndicator {
+  min-width: 92px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #123456;
 }
 
 @media (max-width: 1024px) {
@@ -128,6 +219,12 @@
     padding-left: 20px;
     padding-right: 20px;
   }
+
+  .paginationBar,
+  .paginationControls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 640px) {
@@ -150,6 +247,10 @@
     padding: 16px;
   }
 
+  .paginationBar {
+    padding: 14px;
+  }
+
   .userText {
     white-space: normal;
     text-align: center;
@@ -157,5 +258,14 @@
 
   .summaryChip {
     white-space: normal;
+  }
+
+  .pageNavigation {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .pageButton {
+    min-width: 68px;
   }
 }

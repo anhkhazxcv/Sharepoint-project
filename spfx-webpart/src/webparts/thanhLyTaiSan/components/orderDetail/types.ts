@@ -2,6 +2,7 @@ export type TProcessStep = 'Đăng ký' | 'Thanh toán' | 'Bàn giao' | 'Hoàn t
 
 export interface IOrderItem {
   id: string;
+  assetId: string;
   assetCode: string;
   assetName: string;
   condition: string;
