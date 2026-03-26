@@ -7,10 +7,10 @@ export function formatCurrency(value: number): string {
 }
 
 export function formatDate(value: string): string {
-  var date: Date = new Date(value);
-  var day: string = ('0' + String(date.getDate())).slice(-2);
-  var month: string = ('0' + String(date.getMonth() + 1)).slice(-2);
-  var year: number = date.getFullYear();
+  const date: Date = new Date(value);
+  const day: string = ('0' + String(date.getDate())).slice(-2);
+  const month: string = ('0' + String(date.getMonth() + 1)).slice(-2);
+  const year: number = date.getFullYear();
 
   return day + '/' + month + '/' + String(year);
 }

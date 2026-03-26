@@ -14,6 +14,7 @@ export interface IAssetLiquidationPageProps {
   userEmail: string;
   spHttpClient: SPHttpClient;
   siteUrl: string;
+  purchasedCount: number;
   onAssetsLoaded?: (items: IAssetItem[]) => void;
   onPurchaseSuccess?: (orderDetail: IOrderDetail) => void;
 }
@@ -72,7 +73,6 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
   const [searchValue, setSearchValue] = React.useState<string>('');
   const [quantityInputs, setQuantityInputs] = React.useState<Record<string, string>>({});
   const [quantityErrors, setQuantityErrors] = React.useState<Record<string, string>>({});
-  const [purchasedCount, setPurchasedCount] = React.useState<number>(0);
   const [currentPage, setCurrentPage] = React.useState<number>(1);
   const [pageSize, setPageSize] = React.useState<number>(PAGE_SIZE_OPTIONS[0]);
   const [isLoadingAssets, setIsLoadingAssets] = React.useState<boolean>(true);
@@ -84,7 +84,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
   const conditions: string[] = React.useMemo(() => getUniqueValues(assets, 'condition'), [assets]);
   const sites: string[] = React.useMemo(() => getUniqueValues(assets, 'site'), [assets]);
 
-  const remainingLimit: number = Math.max(PURCHASE_LIMIT - purchasedCount, 0);
+  const remainingLimit: number = Math.max(PURCHASE_LIMIT - props.purchasedCount, 0);
 
   React.useEffect(() => {
     let isMounted: boolean = true;
@@ -294,7 +294,6 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
           }).then(() => nextOrder);
         })
         .then((createdOrder: IOrderDetail) => {
-          setPurchasedCount((prevState) => Math.min(prevState + quantity, PURCHASE_LIMIT));
           setQuantityInputs((prevState) => ({
             ...prevState,
             [asset.id]: ''
@@ -311,6 +310,8 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
           if (props.onPurchaseSuccess) {
             props.onPurchaseSuccess(createdOrder);
           }
+
+          setAssetSubmittingState(asset.id, false);
         })
         .catch((error: Error) => {
           // eslint-disable-next-line no-console
@@ -318,10 +319,10 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
           if (typeof window !== 'undefined' && window.alert) {
             window.alert('Khong the tao don mua tren SharePoint. Vui long thu lai hoac lien he IT Support.');
           }
-        })
-        .then(() => {
+
           setAssetSubmittingState(asset.id, false);
         });
+
     },
     [displayName, props, quantityErrors, quantityInputs, remainingLimit, setAssetSubmittingState]
   );
@@ -360,7 +361,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
         conditions={conditions}
         sites={sites}
         searchValue={searchValue}
-        purchasedCount={purchasedCount}
+        purchasedCount={props.purchasedCount}
         maxLimit={PURCHASE_LIMIT}
         onFilterChange={handleFilterChange}
         onSearchChange={setSearchValue}

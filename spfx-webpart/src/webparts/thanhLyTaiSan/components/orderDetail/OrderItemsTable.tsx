@@ -8,7 +8,7 @@ export interface IOrderItemsTableProps {
 }
 
 export function OrderItemsTable(props: IOrderItemsTableProps): React.ReactElement {
-  var selectedRowId: string | null = props.items.length > 0 ? props.items[0].id : null;
+  const selectedRowId: string | undefined = props.items.length > 0 ? props.items[0].id : undefined;
 
   if (!props.items.length) {
     return (
@@ -33,7 +33,7 @@ export function OrderItemsTable(props: IOrderItemsTableProps): React.ReactElemen
         </thead>
         <tbody>
           {props.items.map(function (item: IOrderItem): React.ReactElement {
-            var isSelected: boolean = item.id === selectedRowId;
+            const isSelected: boolean = item.id === selectedRowId;
 
             return (
               <tr key={item.id} className={isSelected ? styles.selectedRow : ''}>

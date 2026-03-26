@@ -10,8 +10,8 @@ export interface IActionToolbarProps {
 }
 
 export function ActionToolbar(props: IActionToolbarProps): React.ReactElement {
-  var isPaymentStep: boolean = props.currentStep === 'Thanh toán';
-  var isHandoverStep: boolean = props.currentStep === 'Bàn giao';
+  const isPaymentStep: boolean = props.currentStep === 'Thanh toán';
+  const isHandoverStep: boolean = props.currentStep === 'Bàn giao';
 
   return (
     <div className={styles.toolbar}>

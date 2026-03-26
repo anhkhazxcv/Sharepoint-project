@@ -16,8 +16,8 @@ export interface IOrderDetailPageProps {
 }
 
 export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElement {
-  var loadingTimer = React.useRef<number | undefined>(undefined);
-  var [isLoading, setIsLoading] = React.useState<boolean>(true);
+  const loadingTimer = React.useRef<number | undefined>(undefined);
+  const [isLoading, setIsLoading] = React.useState<boolean>(true);
 
   React.useEffect(function () {
     loadingTimer.current = window.setTimeout(function () {
@@ -39,8 +39,8 @@ export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElemen
     );
   }
 
-  var orderDetail: IOrderDetail = props.orderDetail;
-  var canRunHandoverActions: boolean =
+  const orderDetail: IOrderDetail = props.orderDetail;
+  const canRunHandoverActions: boolean =
     orderDetail.currentStep === 'Bàn giao' || orderDetail.currentStep === 'Hoàn tất';
 
   function showMockAction(message: string): void {

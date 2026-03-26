@@ -35,6 +35,22 @@ export interface IUpdateAssetStockOptions {
   nextStock: number;
 }
 
+export interface IUserTransactionRecord {
+  orderId: string;
+  orderCode: string;
+  buyerName: string;
+  buyerEmail: string;
+  purchaseDate: string;
+  totalAmount: number;
+  quantity: number;
+  unitPrice: number;
+  assetCode: string;
+  assetName: string;
+  status: string;
+}
+
+type TSharePointTransactionItem = Record<string, unknown>;
+
 function createTwelveDigitCandidate(): string {
   const timestampPart: string = ('000000000' + String(Date.now())).slice(-9);
   const randomPart: string = ('000' + String(Math.floor(Math.random() * 1000))).slice(-3);
@@ -79,7 +95,7 @@ async function getListItemByFilter(
   spHttpClient: SPHttpClient,
   listTitle: string,
   filterQuery: string
-): Promise<{ Id: number } | null> {
+): Promise<{ Id: number } | undefined> {
   const requestUrl: string =
     siteUrl.replace(/\/$/, '') +
     "/_api/web/lists/getbytitle('" +
@@ -104,10 +120,65 @@ async function getListItemByFilter(
   const json: { value?: Array<{ Id: number }> } = (await response.json()) as { value?: Array<{ Id: number }> };
 
   if (!json.value || !json.value.length) {
-    return null;
+    return undefined;
   }
 
   return json.value[0];
+}
+
+function getStringValue(item: TSharePointTransactionItem, candidates: string[], fallback: string = ''): string {
+  for (let index: number = 0; index < candidates.length; index += 1) {
+    const candidate: string = candidates[index];
+    const value: unknown = item[candidate];
+
+    if (typeof value === 'string' && value.trim() !== '') {
+      return value.trim();
+    }
+  }
+
+  return fallback;
+}
+
+function getNumberValue(item: TSharePointTransactionItem, candidates: string[], fallback: number = 0): number {
+  for (let index: number = 0; index < candidates.length; index += 1) {
+    const candidate: string = candidates[index];
+    const value: unknown = item[candidate];
+
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    if (typeof value === 'string' && value.trim() !== '') {
+      const parsedValue: number = Number(value);
+
+      if (!isNaN(parsedValue)) {
+        return parsedValue;
+      }
+    }
+  }
+
+  return fallback;
+}
+
+function mapTransactionItem(item: TSharePointTransactionItem): IUserTransactionRecord {
+  const orderCode: string = getStringValue(item, ['Title', 'OrderCode'], 'N/A');
+  const quantity: number = getNumberValue(item, ['Quantity'], 0);
+  const unitPrice: number = getNumberValue(item, ['UnitPrice'], 0);
+  const totalAmount: number = getNumberValue(item, ['Total'], quantity * unitPrice);
+
+  return {
+    orderId: orderCode,
+    orderCode,
+    buyerName: getStringValue(item, ['EmployeeName', 'BuyerName'], 'Chua cap nhat'),
+    buyerEmail: getStringValue(item, ['EmployeeEmail', 'BuyerEmail'], ''),
+    purchaseDate: getStringValue(item, ['PurchaseDate', 'Created'], new Date().toISOString()),
+    totalAmount,
+    quantity,
+    unitPrice,
+    assetCode: getStringValue(item, ['AssetCode'], ''),
+    assetName: getStringValue(item, ['AssetName'], 'Chua co ten tai san'),
+    status: getStringValue(item, ['Status'], 'Cho xac nhan')
+  };
 }
 
 async function updateListItemById(
@@ -184,6 +255,40 @@ export async function generateUniqueOrderId(siteUrl: string, spHttpClient: SPHtt
   }
 
   throw new Error('Khong the sinh ma don hang 12 chu so duy nhat.');
+}
+
+export async function getTransactionsByUser(
+  siteUrl: string,
+  spHttpClient: SPHttpClient,
+  userEmail: string
+): Promise<IUserTransactionRecord[]> {
+  const normalizedSiteUrl: string = siteUrl.replace(/\/$/, '');
+  const escapedEmail: string = userEmail.replace(/'/g, "''");
+  const requestUrl: string =
+    normalizedSiteUrl +
+    "/_api/web/lists/getbytitle('" +
+    encodeURIComponent(TRANSACTION_LIST_TITLE) +
+    "')/items?$top=5000&$select=Title,EmployeeName,EmployeeEmail,AssetCode,AssetName,Quantity,UnitPrice,Total,Status,Created&$orderby=Created desc&$filter=" +
+    encodeURIComponent("EmployeeEmail eq '" + escapedEmail + "'");
+  const response: SPHttpClientResponse = await spHttpClient.get(
+    requestUrl,
+    SPHttpClient.configurations.v1,
+    {
+      headers: {
+        Accept: 'application/json;odata.metadata=none'
+      }
+    }
+  );
+
+  if (!response.ok) {
+    const errorText: string = await response.text();
+    throw new Error('Khong the doc lich su giao dich cua nguoi dung. Response: ' + errorText);
+  }
+
+  const json: { value?: TSharePointTransactionItem[] } = (await response.json()) as { value?: TSharePointTransactionItem[] };
+  const items: TSharePointTransactionItem[] = Array.isArray(json.value) ? json.value : [];
+
+  return items.map(mapTransactionItem);
 }
 
 export async function createPaymentHistoryItem(options: ICreatePaymentHistoryOptions): Promise<void> {

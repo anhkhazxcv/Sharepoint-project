@@ -12,9 +12,9 @@ export interface IAssetCatalogServiceOptions {
 type TSharePointItem = Record<string, unknown>;
 
 function getStringValue(item: TSharePointItem, candidates: string[], fallback: string = ''): string {
-  for (var index: number = 0; index < candidates.length; index += 1) {
-    var candidate: string = candidates[index];
-    var value: unknown = item[candidate];
+  for (let index: number = 0; index < candidates.length; index += 1) {
+    const candidate: string = candidates[index];
+    const value: unknown = item[candidate];
 
     if (typeof value === 'string' && value.trim() !== '') {
       return value.trim();
@@ -25,16 +25,16 @@ function getStringValue(item: TSharePointItem, candidates: string[], fallback: s
 }
 
 function getNumberValue(item: TSharePointItem, candidates: string[], fallback: number = 0): number {
-  for (var index: number = 0; index < candidates.length; index += 1) {
-    var candidate: string = candidates[index];
-    var value: unknown = item[candidate];
+  for (let index: number = 0; index < candidates.length; index += 1) {
+    const candidate: string = candidates[index];
+    const value: unknown = item[candidate];
 
     if (typeof value === 'number') {
       return value;
     }
 
     if (typeof value === 'string' && value.trim() !== '') {
-      var parsedValue: number = Number(value);
+      const parsedValue: number = Number(value);
 
       if (!isNaN(parsedValue)) {
         return parsedValue;
@@ -49,8 +49,33 @@ function getItemId(item: TSharePointItem): number {
   return getNumberValue(item, ['Id', 'ID'], 0);
 }
 
+function getImageSourceValue(item: TSharePointItem): string {
+  const directPathValue: string = getStringValue(item, ['FileRef', 'ImageUrl', 'Picture', 'Image']);
+
+  if (directPathValue) {
+    return directPathValue;
+  }
+
+  return getStringValue(item, ['ImageName']);
+}
+
+function joinUrlSegments(segments: string[]): string {
+  return segments
+    .filter(function (segment: string): boolean {
+      return segment.trim() !== '';
+    })
+    .map(function (segment: string, index: number): string {
+      if (index === 0) {
+        return segment.replace(/\/$/, '');
+      }
+
+      return segment.replace(/^\/+|\/+$/g, '');
+    })
+    .join('/');
+}
+
 function buildImageUrl(siteUrl: string, item: TSharePointItem): string {
-  const rawImageValue: string = getStringValue(item, ['ImageName', 'Image', 'ImageUrl', 'Picture', 'FileRef']);
+  const rawImageValue: string = getImageSourceValue(item);
   const normalizedSiteUrl: string = siteUrl.replace(/\/$/, '');
   let fileUrl: string = '';
 
@@ -58,22 +83,29 @@ function buildImageUrl(siteUrl: string, item: TSharePointItem): string {
     return '';
   }
 
+  let parsedSiteUrl: URL;
+
+  try {
+    parsedSiteUrl = new URL(normalizedSiteUrl);
+  } catch {
+    return '';
+  }
+
+  const siteOrigin: string = parsedSiteUrl.origin;
+  const sitePath: string = parsedSiteUrl.pathname.replace(/\/$/, '');
+  const previewBaseUrl: string = joinUrlSegments([siteOrigin, sitePath, '_layouts/15/getpreview.ashx']);
+
   if (/^https?:\/\//i.test(rawImageValue)) {
     fileUrl = rawImageValue;
   } else if (rawImageValue.charAt(0) === '/') {
-    fileUrl = normalizedSiteUrl + rawImageValue;
+    fileUrl = siteOrigin + rawImageValue;
   } else if (rawImageValue.indexOf('/') >= 0) {
-    fileUrl = normalizedSiteUrl + '/' + rawImageValue.replace(/^\//, '');
+    fileUrl = joinUrlSegments([siteOrigin, sitePath, rawImageValue]);
   } else {
-    fileUrl =
-      normalizedSiteUrl +
-      '/' +
-      IMAGE_LIBRARY_TITLE +
-      '/' +
-      encodeURIComponent(rawImageValue);
+    fileUrl = joinUrlSegments([siteOrigin, sitePath, IMAGE_LIBRARY_TITLE, rawImageValue]);
   }
 
-  return normalizedSiteUrl + '/_layouts/15/getpreview.ashx?path=' + encodeURIComponent(fileUrl) + '&resolution=0';
+  return previewBaseUrl + '?path=' + encodeURIComponent(fileUrl) + '&resolution=0';
 }
 
 function mapItemToAsset(item: TSharePointItem, siteUrl: string): IAssetItem {
@@ -96,12 +128,12 @@ function mapItemToAsset(item: TSharePointItem, siteUrl: string): IAssetItem {
 }
 
 export async function getAssetsFromSharePoint(options: IAssetCatalogServiceOptions): Promise<IAssetItem[]> {
-  var requestUrl: string =
+  const requestUrl: string =
     options.siteUrl.replace(/\/$/, '') +
     "/_api/web/lists/getbytitle('" +
     encodeURIComponent(options.listTitle) +
     "')/items?$top=5000";
-  var response: SPHttpClientResponse = await options.spHttpClient.get(
+  const response: SPHttpClientResponse = await options.spHttpClient.get(
     requestUrl,
     SPHttpClient.configurations.v1,
     {

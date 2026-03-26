@@ -6,17 +6,17 @@ export interface IProcessStepperProps {
   currentStep: TProcessStep;
 }
 
-var steps: TProcessStep[] = ['Đăng ký', 'Thanh toán', 'Bàn giao', 'Hoàn tất'];
+const steps: TProcessStep[] = ['Đăng ký', 'Thanh toán', 'Bàn giao', 'Hoàn tất'];
 
 export function ProcessStepper(props: IProcessStepperProps): React.ReactElement {
-  var currentIndex: number = steps.indexOf(props.currentStep);
+  const currentIndex: number = steps.indexOf(props.currentStep);
 
   return (
     <section className={styles.stepperCard}>
       <div className={styles.track}>
         {steps.map(function (step: TProcessStep, index: number): React.ReactElement {
-          var isDone: boolean = index < currentIndex;
-          var isActive: boolean = index === currentIndex;
+          const isDone: boolean = index < currentIndex;
+          const isActive: boolean = index === currentIndex;
 
           return (
             <div key={step} className={styles.stepItem}>
