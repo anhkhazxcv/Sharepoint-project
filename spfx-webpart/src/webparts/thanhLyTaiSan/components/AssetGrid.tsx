@@ -8,18 +8,19 @@ export interface IAssetGridProps {
   quantityInputs: Record<string, string>;
   errors: Record<string, string>;
   remainingLimit: number;
+  submittingAssetIds?: Record<string, boolean>;
   onQuantityChange: (assetId: string, value: string) => void;
   onRegister: (asset: IAssetItem) => void;
 }
 
 export function AssetGrid(props: IAssetGridProps): React.ReactElement {
-  const { assets, quantityInputs, errors, remainingLimit, onQuantityChange, onRegister } = props;
+  const { assets, quantityInputs, errors, remainingLimit, submittingAssetIds, onQuantityChange, onRegister } = props;
 
   if (!assets.length) {
     return (
       <div className={styles.emptyState}>
-        <strong>Không tìm thấy tài sản phù hợp</strong>
-        <span>Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm để xem thêm kết quả.</span>
+        <strong>Khong tim thay tai san phu hop</strong>
+        <span>Thu thay doi bo loc hoac tu khoa tim kiem de xem them ket qua.</span>
       </div>
     );
   }
@@ -33,6 +34,7 @@ export function AssetGrid(props: IAssetGridProps): React.ReactElement {
           quantityValue={quantityInputs[asset.id] || ''}
           errorMessage={errors[asset.id]}
           remainingLimit={remainingLimit}
+          isSubmitting={!!(submittingAssetIds && submittingAssetIds[asset.id])}
           onQuantityChange={onQuantityChange}
           onRegister={onRegister}
         />

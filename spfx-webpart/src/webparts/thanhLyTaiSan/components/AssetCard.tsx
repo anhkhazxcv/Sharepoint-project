@@ -7,6 +7,7 @@ export interface IAssetCardProps {
   quantityValue: string;
   errorMessage?: string;
   remainingLimit: number;
+  isSubmitting?: boolean;
   onQuantityChange: (assetId: string, value: string) => void;
   onRegister: (asset: IAssetItem) => void;
 }
@@ -34,7 +35,7 @@ function renderBarcodeBars(barcode: string): React.ReactNode {
 }
 
 export function AssetCard(props: IAssetCardProps): React.ReactElement {
-  const { asset, quantityValue, errorMessage, remainingLimit, onQuantityChange, onRegister } = props;
+  const { asset, quantityValue, errorMessage, remainingLimit, isSubmitting, onQuantityChange, onRegister } = props;
   const [isImageBroken, setIsImageBroken] = React.useState<boolean>(false);
   const hasImage: boolean = !!asset.imageUrl;
 
@@ -47,14 +48,14 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
     parsedQuantity > 0 &&
     parsedQuantity <= asset.availableQuantity &&
     parsedQuantity <= remainingLimit;
-  const isRegisterDisabled: boolean = isSoldOut || !hasValidQuantity || !!errorMessage || remainingLimit === 0;
+  const isRegisterDisabled: boolean = isSoldOut || !hasValidQuantity || !!errorMessage || remainingLimit === 0 || !!isSubmitting;
 
   return (
     <article className={`${styles.card} ${isSoldOut ? styles.soldOutCard : ''}`}>
       <div className={styles.header}>
         <div className={styles.imageWrap}>
           {!hasImage || isImageBroken ? (
-            <div className={styles.imageFallback}>Không có ảnh</div>
+            <div className={styles.imageFallback}>Khong co anh</div>
           ) : (
             <img
               className={styles.image}
@@ -68,17 +69,17 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
         <div className={styles.info}>
           <div className={styles.titleRow}>
             <span className={`${styles.statusBadge} ${isSoldOut ? styles.statusSoldOut : styles.statusAvailable}`}>
-              {isSoldOut ? 'Hết hàng' : asset.statusText}
+              {isSoldOut ? 'Het hang' : asset.statusText}
             </span>
             <span className={styles.category}>{asset.category}</span>
           </div>
 
           <div className={styles.infoLine}>
-            <span className={styles.label}>Tên TS</span>
+            <span className={styles.label}>Ten TS</span>
             <strong className={styles.valueTitle}>{asset.assetName}</strong>
           </div>
           <div className={styles.infoLine}>
-            <span className={styles.label}>Mã TS</span>
+            <span className={styles.label}>Ma TS</span>
             <strong className={styles.value}>{asset.assetCode}</strong>
           </div>
 
@@ -93,7 +94,7 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
               <strong className={styles.value}>{asset.totalQuantity}</strong>
             </div>
             <div className={styles.infoLine}>
-              <span className={styles.label}>Tình trạng TS</span>
+              <span className={styles.label}>Tinh trang TS</span>
               <strong className={styles.value}>{asset.condition}</strong>
             </div>
             <div className={styles.infoLine}>
@@ -110,12 +111,12 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
 
       <div className={styles.footer}>
         <div className={styles.priceBlock}>
-          <span className={styles.label}>Giá bán</span>
+          <span className={styles.label}>Gia ban</span>
           <strong className={styles.price}>{formatCurrency(asset.price)}</strong>
         </div>
 
         <label className={styles.quantityField} htmlFor={`quantity-${asset.id}`}>
-          <span className={styles.label}>Số lượng mua</span>
+          <span className={styles.label}>So luong mua</span>
           <input
             id={`quantity-${asset.id}`}
             className={`${styles.quantityInput} ${errorMessage ? styles.quantityError : ''}`}
@@ -124,7 +125,7 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
             step={1}
             inputMode="numeric"
             value={isSoldOut ? '0' : quantityValue}
-            disabled={isSoldOut || remainingLimit === 0}
+            disabled={isSoldOut || remainingLimit === 0 || !!isSubmitting}
             onChange={(event: React.ChangeEvent<HTMLInputElement>) => onQuantityChange(asset.id, event.target.value)}
           />
         </label>
@@ -135,15 +136,15 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
           disabled={isRegisterDisabled}
           onClick={() => onRegister(asset)}
         >
-          {isSoldOut ? 'Hết hàng' : 'Đăng ký mua'}
+          {isSoldOut ? 'Het hang' : isSubmitting ? 'Dang tao don...' : 'Dang ky mua'}
         </button>
 
         {remainingLimit === 0 && !isSoldOut ? (
-          <span className={styles.helperText}>Đã đạt giới hạn mua tối đa.</span>
+          <span className={styles.helperText}>Da dat gioi han mua toi da.</span>
         ) : errorMessage ? (
           <span className={styles.errorText}>{errorMessage}</span>
         ) : (
-          <span className={styles.helperText}>Nhập tối đa {Math.min(asset.availableQuantity, remainingLimit)} tài sản.</span>
+          <span className={styles.helperText}>Nhap toi da {Math.min(asset.availableQuantity, remainingLimit)} tai san.</span>
         )}
       </div>
     </article>

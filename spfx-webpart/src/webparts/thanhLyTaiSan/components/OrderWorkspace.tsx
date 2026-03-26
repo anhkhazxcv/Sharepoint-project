@@ -12,22 +12,23 @@ export interface IOrderWorkspaceProps {
   userDisplayName: string;
   userEmail: string;
   spHttpClient: SPHttpClient;
+  siteUrl: string;
 }
 
 type TWorkspaceTab = 'register' | 'orders';
 
 export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement {
-  var [activeTab, setActiveTab] = React.useState<TWorkspaceTab>('register');
-  var [orders, setOrders] = React.useState<IOrderDetail[]>([]);
-  var [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(null);
-  var [assets, setAssets] = React.useState<IAssetItem[]>([]);
+  const [activeTab, setActiveTab] = React.useState<TWorkspaceTab>('register');
+  const [orders, setOrders] = React.useState<IOrderDetail[]>([]);
+  const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(null);
+  const [assets, setAssets] = React.useState<IAssetItem[]>([]);
 
-  var handleAssetsLoaded = React.useCallback(function (items: IAssetItem[]): void {
+  const handleAssetsLoaded = React.useCallback((items: IAssetItem[]): void => {
     setAssets(items);
   }, []);
 
   function handlePurchaseSuccess(orderDetail: IOrderDetail): void {
-    setOrders(function (prevOrders: IOrderDetail[]): IOrderDetail[] {
+    setOrders((prevOrders: IOrderDetail[]): IOrderDetail[] => {
       return [orderDetail].concat(prevOrders);
     });
     setSelectedOrderId(orderDetail.orderId);
@@ -35,50 +36,37 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
   }
 
   function getOrderById(orderId: string): IOrderDetail | null {
-    var matchedOrder: IOrderDetail | null = null;
-
-    orders.forEach(function (order: IOrderDetail): void {
-      if (order.orderId === orderId) {
-        matchedOrder = order;
-      }
-    });
-
-    return matchedOrder;
+    const matchedOrder: IOrderDetail[] = orders.filter((order: IOrderDetail) => order.orderId === orderId);
+    return matchedOrder.length ? matchedOrder[0] : null;
   }
 
   function updateOrder(orderId: string, updater: (order: IOrderDetail) => IOrderDetail): void {
-    setOrders(function (prevOrders: IOrderDetail[]): IOrderDetail[] {
-      return prevOrders.map(function (order: IOrderDetail): IOrderDetail {
+    setOrders((prevOrders: IOrderDetail[]): IOrderDetail[] => {
+      return prevOrders.map((order: IOrderDetail): IOrderDetail => {
         return order.orderId === orderId ? updater(order) : order;
       });
     });
   }
 
   function handleConfirmPayment(orderId: string): void {
-    var targetOrder: IOrderDetail | null = getOrderById(orderId);
-    var firstItem: IOrderItem | null = targetOrder && targetOrder.items.length ? targetOrder.items[0] : null;
-    var foundAsset: IAssetItem | null = null;
+    const targetOrder: IOrderDetail | null = getOrderById(orderId);
+    const firstItem: IOrderItem | null = targetOrder && targetOrder.items.length ? targetOrder.items[0] : null;
 
     if (!targetOrder || !firstItem) {
       return;
     }
 
-    var confirmedOrder: IOrderDetail = targetOrder;
-    var confirmedItem: IOrderItem = firstItem;
+    const confirmedOrder: IOrderDetail = targetOrder;
+    const confirmedItem: IOrderItem = firstItem;
+    const matchedAssets: IAssetItem[] = assets.filter((asset: IAssetItem) => asset.id === confirmedItem.assetId);
 
-    assets.forEach(function (asset: IAssetItem): void {
-      if (asset.id === confirmedItem.assetId) {
-        foundAsset = asset;
-      }
-    });
-
-    if (!foundAsset) {
+    if (!matchedAssets.length) {
       window.alert('Khong tim thay tai san de tru ton.');
       return;
     }
 
-    var confirmedAsset: IAssetItem = foundAsset;
-    var nextStock: number = confirmedAsset.availableQuantity - confirmedItem.quantity;
+    const confirmedAsset: IAssetItem = matchedAssets[0];
+    const nextStock: number = confirmedAsset.availableQuantity - confirmedItem.quantity;
 
     if (nextStock < 0) {
       window.alert('So luong ton hien tai khong du de xac nhan thanh toan.');
@@ -86,27 +74,30 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
     }
 
     createPaymentHistoryItem({
+      siteUrl: props.siteUrl,
       spHttpClient: props.spHttpClient,
       transferContent: confirmedOrder.paymentQr.transferContent,
       paymentConfirmedAt: new Date().toISOString()
     })
-      .then(function (): Promise<void> {
+      .then((): Promise<void> => {
         return updateTransactionStatus({
+          siteUrl: props.siteUrl,
           spHttpClient: props.spHttpClient,
           orderId: confirmedOrder.orderCode,
-          status: 'Đã thanh toán'
+          status: 'Da thanh toan'
         });
       })
-      .then(function (): Promise<void> {
+      .then((): Promise<void> => {
         return updateAssetStock({
+          siteUrl: props.siteUrl,
           spHttpClient: props.spHttpClient,
           assetItemId: confirmedAsset.id,
-          nextStock: nextStock
+          nextStock
         });
       })
-      .then(function (): void {
-        setAssets(function (prevAssets: IAssetItem[]): IAssetItem[] {
-          return prevAssets.map(function (asset: IAssetItem): IAssetItem {
+      .then((): void => {
+        setAssets((prevAssets: IAssetItem[]): IAssetItem[] => {
+          return prevAssets.map((asset: IAssetItem): IAssetItem => {
             if (asset.id !== confirmedAsset.id) {
               return asset;
             }
@@ -120,16 +111,16 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
           });
         });
 
-        updateOrder(orderId, function (order: IOrderDetail): IOrderDetail {
+        updateOrder(orderId, (order: IOrderDetail): IOrderDetail => {
           return {
             ...order,
             currentStep: 'Bàn giao',
-            paymentStatus: 'Đã thanh toán',
-            handoverStatus: 'Chờ bàn giao'
+            paymentStatus: 'Da thanh toan',
+            handoverStatus: 'Cho ban giao'
           };
         });
       })
-      .catch(function (error: Error): void {
+      .catch((error: Error): void => {
         // eslint-disable-next-line no-console
         console.error('Khong the xac nhan thanh toan', error);
         window.alert('Khong the xac nhan thanh toan tren SharePoint.');
@@ -137,12 +128,12 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
   }
 
   function handleConfirmHandover(orderId: string): void {
-    updateOrder(orderId, function (order: IOrderDetail): IOrderDetail {
+    updateOrder(orderId, (order: IOrderDetail): IOrderDetail => {
       return {
         ...order,
         currentStep: 'Hoàn tất',
-        paymentStatus: 'Đã thanh toán',
-        handoverStatus: 'Đã bàn giao'
+        paymentStatus: 'Da thanh toan',
+        handoverStatus: 'Da ban giao'
       };
     });
   }
@@ -157,7 +148,7 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
     setActiveTab('orders');
   }
 
-  var selectedOrder: IOrderDetail | null = selectedOrderId ? getOrderById(selectedOrderId) : null;
+  const selectedOrder: IOrderDetail | null = selectedOrderId ? getOrderById(selectedOrderId) : null;
 
   return (
     <div className={styles.workspace}>
@@ -165,18 +156,18 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
         <button
           type="button"
           className={styles.tabButton + ' ' + (activeTab === 'register' ? styles.tabButtonActive : '')}
-          onClick={function (): void {
+          onClick={(): void => {
             setActiveTab('register');
           }}
         >
-          Đăng ký mua tài sản
+          Dang ky mua tai san
         </button>
         <button
           type="button"
           className={styles.tabButton + ' ' + (activeTab === 'orders' ? styles.tabButtonActive : '')}
           onClick={showOrderList}
         >
-          Thanh toán đơn hàng ({orders.length})
+          Thanh toan don hang ({orders.length})
         </button>
       </div>
 
@@ -186,6 +177,7 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
             userDisplayName={props.userDisplayName}
             userEmail={props.userEmail}
             spHttpClient={props.spHttpClient}
+            siteUrl={props.siteUrl}
             onAssetsLoaded={handleAssetsLoaded}
             onPurchaseSuccess={handlePurchaseSuccess}
           />
@@ -194,7 +186,7 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
             orderDetail={selectedOrder}
             onConfirmPayment={handleConfirmPayment}
             onConfirmHandover={handleConfirmHandover}
-            onBack={function (): void {
+            onBack={(): void => {
               setSelectedOrderId(null);
             }}
           />

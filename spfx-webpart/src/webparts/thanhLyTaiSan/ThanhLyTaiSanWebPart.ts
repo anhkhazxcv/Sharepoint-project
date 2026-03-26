@@ -14,6 +14,7 @@ import { IThanhLyTaiSanProps } from './components/IThanhLyTaiSanProps';
 
 export interface IThanhLyTaiSanWebPartProps {
   description: string;
+  siteUrl: string;
 }
 
 export default class ThanhLyTaiSanWebPart extends BaseClientSideWebPart<IThanhLyTaiSanWebPartProps> {
@@ -31,7 +32,8 @@ export default class ThanhLyTaiSanWebPart extends BaseClientSideWebPart<IThanhLy
         hasTeamsContext: !!this.context.sdks.microsoftTeams,
         userDisplayName: this.context.pageContext.user.displayName,
         userEmail: this.context.pageContext.user.email,
-        spHttpClient: this.context.spHttpClient
+        spHttpClient: this.context.spHttpClient,
+        siteUrl: this.properties.siteUrl || this.context.pageContext.web.absoluteUrl
       }
     );
 
@@ -112,6 +114,9 @@ export default class ThanhLyTaiSanWebPart extends BaseClientSideWebPart<IThanhLy
               groupFields: [
                 PropertyPaneTextField('description', {
                   label: strings.DescriptionFieldLabel
+                }),
+                PropertyPaneTextField('siteUrl', {
+                  label: 'SharePoint Site URL'
                 })
               ]
             }

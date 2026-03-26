@@ -1,6 +1,8 @@
 import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 import type { IAssetItem } from '../types';
 
+const IMAGE_LIBRARY_TITLE: string = 'TaiSanImage';
+
 export interface IAssetCatalogServiceOptions {
   siteUrl: string;
   listTitle: string;
@@ -47,43 +49,35 @@ function getItemId(item: TSharePointItem): number {
   return getNumberValue(item, ['Id', 'ID'], 0);
 }
 
-function buildImageUrl(siteUrl: string, listTitle: string, item: TSharePointItem): string {
-  var rawImageValue: string = getStringValue(item, ['ImageName', 'Image', 'ImageUrl', 'Picture', 'FileRef']);
-  var itemId: number = getItemId(item);
+function buildImageUrl(siteUrl: string, item: TSharePointItem): string {
+  const rawImageValue: string = getStringValue(item, ['ImageName', 'Image', 'ImageUrl', 'Picture', 'FileRef']);
+  const normalizedSiteUrl: string = siteUrl.replace(/\/$/, '');
+  let fileUrl: string = '';
 
   if (!rawImageValue) {
     return '';
   }
 
   if (/^https?:\/\//i.test(rawImageValue)) {
-    return rawImageValue;
+    fileUrl = rawImageValue;
+  } else if (rawImageValue.charAt(0) === '/') {
+    fileUrl = normalizedSiteUrl + rawImageValue;
+  } else if (rawImageValue.indexOf('/') >= 0) {
+    fileUrl = normalizedSiteUrl + '/' + rawImageValue.replace(/^\//, '');
+  } else {
+    fileUrl =
+      normalizedSiteUrl +
+      '/' +
+      IMAGE_LIBRARY_TITLE +
+      '/' +
+      encodeURIComponent(rawImageValue);
   }
 
-  if (rawImageValue.charAt(0) === '/') {
-    return siteUrl.replace(/\/$/, '') + rawImageValue;
-  }
-
-  if (rawImageValue.indexOf('/') >= 0) {
-    return siteUrl.replace(/\/$/, '') + '/' + rawImageValue.replace(/^\//, '');
-  }
-
-  if (itemId > 0) {
-    return (
-      siteUrl.replace(/\/$/, '') +
-      "/Lists/" +
-      encodeURIComponent(listTitle) +
-      "/Attachments/" +
-      String(itemId) +
-      "/" +
-      encodeURIComponent(rawImageValue)
-    );
-  }
-
-  return rawImageValue;
+  return normalizedSiteUrl + '/_layouts/15/getpreview.ashx?path=' + encodeURIComponent(fileUrl) + '&resolution=0';
 }
 
-function mapItemToAsset(item: TSharePointItem, siteUrl: string, listTitle: string): IAssetItem {
-  var stock: number = getNumberValue(item, ['Stock', 'SoLuong', 'AvailableQuantity'], 0);
+function mapItemToAsset(item: TSharePointItem, siteUrl: string): IAssetItem {
+  const stock: number = getNumberValue(item, ['Stock', 'SoLuong', 'AvailableQuantity'], 0);
 
   return {
     id: String(getItemId(item) || getStringValue(item, ['Code', 'Barcode', 'Title'], '0')),
@@ -95,7 +89,7 @@ function mapItemToAsset(item: TSharePointItem, siteUrl: string, listTitle: strin
     totalQuantity: stock,
     availableQuantity: stock,
     price: getNumberValue(item, ['Price', 'GiaBan'], 0),
-    imageUrl: buildImageUrl(siteUrl, listTitle, item),
+    imageUrl: buildImageUrl(siteUrl, item),
     barcode: getStringValue(item, ['Barcode', 'BarCode', 'MaVach'], ''),
     statusText: stock > 0 ? 'Con hang' : 'Het hang'
   };
@@ -121,10 +115,10 @@ export async function getAssetsFromSharePoint(options: IAssetCatalogServiceOptio
     throw new Error('Khong the tai du lieu danh muc tai san tu SharePoint.');
   }
 
-  var json: { value?: TSharePointItem[] } = (await response.json()) as { value?: TSharePointItem[] };
-  var items: TSharePointItem[] = Array.isArray(json.value) ? json.value : [];
-  var mappedItems: IAssetItem[] = items.map(function (item: TSharePointItem): IAssetItem {
-    return mapItemToAsset(item, options.siteUrl, options.listTitle);
+  const json: { value?: TSharePointItem[] } = (await response.json()) as { value?: TSharePointItem[] };
+  const items: TSharePointItem[] = Array.isArray(json.value) ? json.value : [];
+  const mappedItems: IAssetItem[] = items.map(function (item: TSharePointItem): IAssetItem {
+    return mapItemToAsset(item, options.siteUrl);
   });
 
   // eslint-disable-next-line no-console

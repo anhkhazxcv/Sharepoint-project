@@ -2,17 +2,18 @@ import * as React from 'react';
 import type { SPHttpClient } from '@microsoft/sp-http';
 import { AssetGrid } from './AssetGrid';
 import { FilterBar } from './FilterBar';
-import type { IPurchasePayload, IAssetFilters, IAssetItem } from './types';
+import type { IAssetFilters, IAssetItem, IPurchasePayload } from './types';
 import { createOrderDetailFromPurchase } from './orderDetail/mockOrderDetail';
 import type { IOrderDetail } from './orderDetail/types';
 import { getAssetsFromSharePoint } from './services/assetCatalogService';
-import { createTransactionItem } from './services/orderTransactionService';
+import { createTransactionItem, generateUniqueOrderId } from './services/orderTransactionService';
 import styles from './AssetLiquidationPage.module.scss';
 
 export interface IAssetLiquidationPageProps {
   userDisplayName?: string;
   userEmail: string;
   spHttpClient: SPHttpClient;
+  siteUrl: string;
   onAssetsLoaded?: (items: IAssetItem[]) => void;
   onPurchaseSuccess?: (orderDetail: IOrderDetail) => void;
 }
@@ -24,7 +25,6 @@ const defaultFilters: IAssetFilters = {
 };
 
 const PAGE_SIZE_OPTIONS: number[] = [10, 20, 50];
-const SHAREPOINT_SITE_URL: string = 'https://masterisegroup.sharepoint.com';
 const SHAREPOINT_LIST_TITLE: string = 'lstDanhMucTaiSan';
 const PURCHASE_LIMIT: number = 5;
 const MAX_SHAREPOINT_RETRIES: number = 5;
@@ -75,9 +75,10 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
   const [purchasedCount, setPurchasedCount] = React.useState<number>(0);
   const [currentPage, setCurrentPage] = React.useState<number>(1);
   const [pageSize, setPageSize] = React.useState<number>(PAGE_SIZE_OPTIONS[0]);
-  const [nextOrderIndex, setNextOrderIndex] = React.useState<number>(1);
   const [isLoadingAssets, setIsLoadingAssets] = React.useState<boolean>(true);
   const [assetLoadError, setAssetLoadError] = React.useState<string>('');
+  const [submittingAssetIds, setSubmittingAssetIds] = React.useState<Record<string, boolean>>({});
+  const submittingAssetIdsRef = React.useRef<Record<string, boolean>>({});
 
   const categories: string[] = React.useMemo(() => getUniqueValues(assets, 'category'), [assets]);
   const conditions: string[] = React.useMemo(() => getUniqueValues(assets, 'condition'), [assets]);
@@ -87,7 +88,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
 
   React.useEffect(() => {
     let isMounted: boolean = true;
-    var attemptCount: number = 0;
+    let attemptCount: number = 0;
 
     setIsLoadingAssets(true);
     setAssetLoadError('');
@@ -96,7 +97,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
       attemptCount += 1;
 
       getAssetsFromSharePoint({
-        siteUrl: SHAREPOINT_SITE_URL,
+        siteUrl: props.siteUrl,
         listTitle: SHAREPOINT_LIST_TITLE,
         spHttpClient: props.spHttpClient
       })
@@ -138,7 +139,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
     return () => {
       isMounted = false;
     };
-  }, [props.spHttpClient]);
+  }, [props.siteUrl, props.spHttpClient]);
 
   const visibleAssets: IAssetItem[] = React.useMemo(() => {
     const keyword: string = normalizeKeyword(searchValue);
@@ -238,6 +239,18 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
     }));
   }, []);
 
+  const setAssetSubmittingState = React.useCallback((assetId: string, isSubmitting: boolean) => {
+    submittingAssetIdsRef.current = {
+      ...submittingAssetIdsRef.current,
+      [assetId]: isSubmitting
+    };
+
+    setSubmittingAssetIds((prevState) => ({
+      ...prevState,
+      [assetId]: isSubmitting
+    }));
+  }, []);
+
   const handleRegister = React.useCallback(
     (asset: IAssetItem) => {
       const quantity: number = Number(quantityInputs[asset.id] || '0');
@@ -254,48 +267,63 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
         return;
       }
 
+      if (submittingAssetIdsRef.current[asset.id]) {
+        return;
+      }
+
       const payload: IPurchasePayload = {
         asset,
         quantity
       };
-      const nextOrder: IOrderDetail = createOrderDetailFromPurchase(asset, quantity, displayName, nextOrderIndex);
+
+      setAssetSubmittingState(asset.id, true);
 
       // eslint-disable-next-line no-console
       console.log('Dang ky mua tai san', payload);
 
-      setPurchasedCount((prevState) => Math.min(prevState + quantity, PURCHASE_LIMIT));
-      setNextOrderIndex((prevState) => prevState + 1);
-      setQuantityInputs((prevState) => ({
-        ...prevState,
-        [asset.id]: ''
-      }));
-      setQuantityErrors((prevState) => ({
-        ...prevState,
-        [asset.id]: ''
-      }));
+      generateUniqueOrderId(props.siteUrl, props.spHttpClient)
+        .then((generatedOrderId: string) => {
+          const nextOrder: IOrderDetail = createOrderDetailFromPurchase(asset, quantity, displayName, generatedOrderId);
 
-      createTransactionItem({
-        spHttpClient: props.spHttpClient,
-        buyerName: displayName,
-        buyerEmail: props.userEmail,
-        orderDetail: nextOrder
-      })
-        .then(() => {
+          return createTransactionItem({
+            siteUrl: props.siteUrl,
+            spHttpClient: props.spHttpClient,
+            buyerName: displayName,
+            buyerEmail: props.userEmail,
+            orderDetail: nextOrder
+          }).then(() => nextOrder);
+        })
+        .then((createdOrder: IOrderDetail) => {
+          setPurchasedCount((prevState) => Math.min(prevState + quantity, PURCHASE_LIMIT));
+          setQuantityInputs((prevState) => ({
+            ...prevState,
+            [asset.id]: ''
+          }));
+          setQuantityErrors((prevState) => ({
+            ...prevState,
+            [asset.id]: ''
+          }));
+
           if (typeof window !== 'undefined' && window.alert) {
-            window.alert('Dang ky mua thanh cong');
+            window.alert('Dang ky mua thanh cong. Ma don hang: ' + createdOrder.orderCode);
           }
 
           if (props.onPurchaseSuccess) {
-            props.onPurchaseSuccess(nextOrder);
+            props.onPurchaseSuccess(createdOrder);
           }
         })
         .catch((error: Error) => {
           // eslint-disable-next-line no-console
-          console.error('Khong the luu giao dich vao SharePoint', error);
-          window.alert('Khong the tao don mua tren SharePoint.');
+          console.error('Khong the tao don mua tren SharePoint', error);
+          if (typeof window !== 'undefined' && window.alert) {
+            window.alert('Khong the tao don mua tren SharePoint. Vui long thu lai hoac lien he IT Support.');
+          }
+        })
+        .then(() => {
+          setAssetSubmittingState(asset.id, false);
         });
     },
-    [displayName, nextOrderIndex, props, quantityErrors, quantityInputs, remainingLimit]
+    [displayName, props, quantityErrors, quantityInputs, remainingLimit, setAssetSubmittingState]
   );
 
   return (
@@ -317,11 +345,9 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
       <div className={styles.subHeader}>
         <div>
           <strong className={styles.subHeaderTitle}>Danh sach tai san thanh ly</strong>
+          <span className={styles.subHeaderText}>CBNV co the tim kiem, loc va dang ky mua tai san tren cung mot man hinh.</span>
           <span className={styles.subHeaderText}>
-            CBNV co the tim kiem, loc va dang ky mua tai san tren cung mot man hinh.
-          </span>
-          <span className={styles.subHeaderText}>
-            Nguon du lieu: {SHAREPOINT_SITE_URL} / {SHAREPOINT_LIST_TITLE}
+            Nguon du lieu: {props.siteUrl} / {SHAREPOINT_LIST_TITLE}
           </span>
           {!!assetLoadError && <span className={styles.loadError}>{assetLoadError}</span>}
         </div>
@@ -349,6 +375,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
             quantityInputs={quantityInputs}
             errors={quantityErrors}
             remainingLimit={remainingLimit}
+            submittingAssetIds={submittingAssetIds}
             onQuantityChange={handleQuantityChange}
             onRegister={handleRegister}
           />

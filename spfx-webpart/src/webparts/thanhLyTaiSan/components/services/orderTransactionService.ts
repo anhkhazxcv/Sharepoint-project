@@ -1,12 +1,13 @@
 import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 import type { IOrderDetail } from '../orderDetail/types';
 
-const SHAREPOINT_SITE_URL: string = 'https://masterisegroup.sharepoint.com';
 const ASSET_LIST_TITLE: string = 'lstDanhMucTaiSan';
 const TRANSACTION_LIST_TITLE: string = 'lstGiaoDich';
 const PAYMENT_HISTORY_LIST_TITLE: string = 'lstThanhToan';
+let lastGeneratedOrderId: string = '';
 
 export interface ICreateTransactionOptions {
+  siteUrl: string;
   spHttpClient: SPHttpClient;
   buyerName: string;
   buyerEmail: string;
@@ -14,26 +15,44 @@ export interface ICreateTransactionOptions {
 }
 
 export interface ICreatePaymentHistoryOptions {
+  siteUrl: string;
   spHttpClient: SPHttpClient;
   transferContent: string;
   paymentConfirmedAt: string;
 }
 
 export interface IUpdateTransactionStatusOptions {
+  siteUrl: string;
   spHttpClient: SPHttpClient;
   orderId: string;
   status: string;
 }
 
 export interface IUpdateAssetStockOptions {
+  siteUrl: string;
   spHttpClient: SPHttpClient;
   assetItemId: string;
   nextStock: number;
 }
 
-async function postListItem(spHttpClient: SPHttpClient, listTitle: string, payload: Record<string, unknown>): Promise<void> {
+function createTwelveDigitCandidate(): string {
+  const timestampPart: string = ('000000000' + String(Date.now())).slice(-9);
+  const randomPart: string = ('000' + String(Math.floor(Math.random() * 1000))).slice(-3);
+  let candidate: string = timestampPart + randomPart;
+
+  if (lastGeneratedOrderId && candidate <= lastGeneratedOrderId) {
+    candidate = String(Number(lastGeneratedOrderId) + 1);
+  }
+
+  candidate = ('000000000000' + candidate).slice(-12);
+  lastGeneratedOrderId = candidate;
+
+  return candidate;
+}
+
+async function postListItem(siteUrl: string, spHttpClient: SPHttpClient, listTitle: string, payload: Record<string, unknown>): Promise<void> {
   const requestUrl: string =
-    SHAREPOINT_SITE_URL.replace(/\/$/, '') +
+    siteUrl.replace(/\/$/, '') +
     "/_api/web/lists/getbytitle('" +
     encodeURIComponent(listTitle) +
     "')/items";
@@ -50,17 +69,19 @@ async function postListItem(spHttpClient: SPHttpClient, listTitle: string, paylo
   );
 
   if (!response.ok) {
-    throw new Error('Khong the ghi du lieu vao SharePoint list ' + listTitle + '.');
+    const errorText: string = await response.text();
+    throw new Error('Khong the ghi du lieu vao SharePoint list ' + listTitle + '. Response: ' + errorText);
   }
 }
 
 async function getListItemByFilter(
+  siteUrl: string,
   spHttpClient: SPHttpClient,
   listTitle: string,
   filterQuery: string
 ): Promise<{ Id: number } | null> {
   const requestUrl: string =
-    SHAREPOINT_SITE_URL.replace(/\/$/, '') +
+    siteUrl.replace(/\/$/, '') +
     "/_api/web/lists/getbytitle('" +
     encodeURIComponent(listTitle) +
     "')/items?$top=1&$select=Id&$filter=" +
@@ -76,7 +97,8 @@ async function getListItemByFilter(
   );
 
   if (!response.ok) {
-    throw new Error('Khong the doc du lieu tu SharePoint list ' + listTitle + '.');
+    const errorText: string = await response.text();
+    throw new Error('Khong the doc du lieu tu SharePoint list ' + listTitle + '. Response: ' + errorText);
   }
 
   const json: { value?: Array<{ Id: number }> } = (await response.json()) as { value?: Array<{ Id: number }> };
@@ -89,13 +111,14 @@ async function getListItemByFilter(
 }
 
 async function updateListItemById(
+  siteUrl: string,
   spHttpClient: SPHttpClient,
   listTitle: string,
   itemId: number,
   payload: Record<string, unknown>
 ): Promise<void> {
   const requestUrl: string =
-    SHAREPOINT_SITE_URL.replace(/\/$/, '') +
+    siteUrl.replace(/\/$/, '') +
     "/_api/web/lists/getbytitle('" +
     encodeURIComponent(listTitle) +
     "')/items(" +
@@ -116,16 +139,20 @@ async function updateListItemById(
   );
 
   if (!response.ok) {
-    throw new Error('Khong the cap nhat du lieu trong SharePoint list ' + listTitle + '.');
+    const errorText: string = await response.text();
+    throw new Error('Khong the cap nhat du lieu trong SharePoint list ' + listTitle + '. Response: ' + errorText);
   }
 }
 
 export async function createTransactionItem(options: ICreateTransactionOptions): Promise<void> {
   const firstItem = options.orderDetail.items[0];
 
-  await postListItem(options.spHttpClient, TRANSACTION_LIST_TITLE, {
+  if (!firstItem) {
+    throw new Error('Khong co san pham trong don hang de tao giao dich.');
+  }
+
+  await postListItem(options.siteUrl, options.spHttpClient, TRANSACTION_LIST_TITLE, {
     Title: options.orderDetail.orderCode,
-    OrderId: options.orderDetail.orderCode,
     EmployeeName: options.buyerName,
     EmployeeEmail: options.buyerEmail,
     AssetCode: firstItem.assetCode,
@@ -137,27 +164,59 @@ export async function createTransactionItem(options: ICreateTransactionOptions):
   });
 }
 
+export async function generateUniqueOrderId(siteUrl: string, spHttpClient: SPHttpClient): Promise<string> {
+  let attemptIndex: number = 0;
+
+  while (attemptIndex < 10) {
+    const candidate: string = createTwelveDigitCandidate();
+    const existingItem = await getListItemByFilter(
+      siteUrl,
+      spHttpClient,
+      TRANSACTION_LIST_TITLE,
+      "Title eq '" + candidate + "'"
+    );
+
+    if (!existingItem) {
+      return candidate;
+    }
+
+    attemptIndex += 1;
+  }
+
+  throw new Error('Khong the sinh ma don hang 12 chu so duy nhat.');
+}
+
 export async function createPaymentHistoryItem(options: ICreatePaymentHistoryOptions): Promise<void> {
-  await postListItem(options.spHttpClient, PAYMENT_HISTORY_LIST_TITLE, {
-    Title: options.transferContent,
-    TransferContent: options.transferContent,
-    PaymentConfirmedAt: options.paymentConfirmedAt
-  });
+  try {
+    await postListItem(options.siteUrl, options.spHttpClient, PAYMENT_HISTORY_LIST_TITLE, {
+      Title: options.transferContent,
+      TransferContent: options.transferContent,
+      PaymentConfirmedAt: options.paymentConfirmedAt
+    });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('Khong ghi duoc day du field lstThanhToan, thu fallback ve Title.', error);
+
+    await postListItem(options.siteUrl, options.spHttpClient, PAYMENT_HISTORY_LIST_TITLE, {
+      Title: options.transferContent
+    });
+  }
 }
 
 export async function updateTransactionStatus(options: IUpdateTransactionStatusOptions): Promise<void> {
   const orderId: string = options.orderId.replace(/'/g, "''");
   const listItem = await getListItemByFilter(
+    options.siteUrl,
     options.spHttpClient,
     TRANSACTION_LIST_TITLE,
-    "OrderId eq '" + orderId + "'"
+    "Title eq '" + orderId + "'"
   );
 
   if (!listItem) {
     throw new Error('Khong tim thay giao dich de cap nhat trang thai.');
   }
 
-  await updateListItemById(options.spHttpClient, TRANSACTION_LIST_TITLE, listItem.Id, {
+  await updateListItemById(options.siteUrl, options.spHttpClient, TRANSACTION_LIST_TITLE, listItem.Id, {
     Status: options.status
   });
 }
@@ -169,7 +228,7 @@ export async function updateAssetStock(options: IUpdateAssetStockOptions): Promi
     throw new Error('Asset item id khong hop le.');
   }
 
-  await updateListItemById(options.spHttpClient, ASSET_LIST_TITLE, assetItemId, {
+  await updateListItemById(options.siteUrl, options.spHttpClient, ASSET_LIST_TITLE, assetItemId, {
     Stock: options.nextStock
   });
 }

@@ -8,4 +8,5 @@ export interface IThanhLyTaiSanProps {
   userDisplayName: string;
   userEmail: string;
   spHttpClient: SPHttpClient;
+  siteUrl: string;
 }

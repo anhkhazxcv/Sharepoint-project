@@ -2,7 +2,7 @@ import type { IOrderDetail } from './types';
 import type { IAssetItem } from '../types';
 
 function createAssetImage(label: string, accent: string, background: string): string {
-  var svg: string =
+  const svg: string =
     "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'>" +
     "<rect width='120' height='120' rx='14' fill='" + background + "'/>" +
     "<rect x='12' y='12' width='96' height='96' rx='12' fill='white' opacity='0.84'/>" +
@@ -19,7 +19,7 @@ function createAssetImage(label: string, accent: string, background: string): st
 }
 
 function createBankLogo(bankName: string): string {
-  var svg: string =
+  const svg: string =
     "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 92 92'>" +
     "<rect width='92' height='92' rx='18' fill='#e7f0fb'/>" +
     "<rect x='14' y='18' width='64' height='52' rx='12' fill='#0f4c81'/>" +
@@ -34,7 +34,7 @@ function createBankLogo(bankName: string): string {
 }
 
 function createQrPlaceholder(): string {
-  var svg: string =
+  const svg: string =
     "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 220'>" +
     "<rect width='220' height='220' rx='18' fill='white'/>" +
     "<rect x='16' y='16' width='188' height='188' rx='8' fill='#f8fafc' stroke='#d6dee8'/>" +
@@ -66,29 +66,33 @@ function createQrPlaceholder(): string {
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
-export var mockOrderDetail: IOrderDetail = {
-  orderId: 'order-1',
-  orderCode: 'DH-2024-0001',
+function sanitizeBuyerName(buyerName: string): string {
+  return (buyerName || 'CBNV').replace(/\s+/g, '').slice(0, 24);
+}
+
+export const mockOrderDetail: IOrderDetail = {
+  orderId: '100000000001',
+  orderCode: '100000000001',
   buyerName: 'Nguyen Van A',
   purchaseDate: '2024-11-12T08:30:00',
   totalAmount: 21000000,
   currentStep: 'Thanh toán',
-  paymentStatus: 'Cho xac nhan',
-  handoverStatus: 'Chua ban giao',
+  paymentStatus: 'Chờ xác nhận',
+  handoverStatus: 'Chưa bàn giao',
   bankAccount: {
     bankName: 'Vietcombank',
-    accountName: 'BANH HAN',
+    accountName: 'BAN HAN',
     accountNumber: '891260009',
     logoUrl: createBankLogo('VCB')
   },
   paymentQr: {
     qrImageUrl: createQrPlaceholder(),
-    transferContent: 'TT DH-2024-0001 NguyenVanA',
+    transferContent: 'TT 100000000001 NguyenVanA',
     amount: 21000000
   },
   items: [
     {
-      id: 'item-1',
+      id: '10000000000101',
       assetId: '1',
       assetCode: 'TS001',
       assetName: 'Laptop Dell XPS 13',
@@ -103,42 +107,47 @@ export var mockOrderDetail: IOrderDetail = {
   ]
 };
 
-export function createOrderDetailFromPurchase(asset: IAssetItem, quantity: number, buyerName: string, orderIndex: number): IOrderDetail {
-  var now: Date = new Date();
-  var orderCode: string = 'DH-2024-' + ('000' + String(orderIndex)).slice(-4);
-  var amount: number = asset.price * quantity;
+export function createOrderDetailFromPurchase(
+  asset: IAssetItem,
+  quantity: number,
+  buyerName: string,
+  orderId: string
+): IOrderDetail {
+  const now: Date = new Date();
+  const amount: number = asset.price * quantity;
+  const compactBuyerName: string = sanitizeBuyerName(buyerName);
 
   return {
-    orderId: 'order-' + String(orderIndex),
-    orderCode: orderCode,
-    buyerName: buyerName,
+    orderId,
+    orderCode: orderId,
+    buyerName,
     purchaseDate: now.toISOString(),
     totalAmount: amount,
     currentStep: 'Thanh toán',
-    paymentStatus: 'Cho xac nhan',
-    handoverStatus: 'Chua ban giao',
+    paymentStatus: 'Chờ xác nhận',
+    handoverStatus: 'Chưa bàn giao',
     bankAccount: {
       bankName: 'Vietcombank',
-      accountName: 'BANH HAN',
+      accountName: 'BAN HAN',
       accountNumber: '891260009',
       logoUrl: createBankLogo('VCB')
     },
     paymentQr: {
       qrImageUrl: createQrPlaceholder(),
-      transferContent: 'TT ' + orderCode + ' ' + buyerName.replace(/\s+/g, ''),
-      amount: amount
+      transferContent: 'TT ' + orderId + ' ' + compactBuyerName,
+      amount
     },
     items: [
       {
-        id: 'item-' + String(orderIndex) + '-1',
+        id: orderId + '01',
         assetId: asset.id,
         assetCode: asset.assetCode,
         assetName: asset.assetName,
         condition: asset.condition,
         site: asset.site,
-        quantity: quantity,
+        quantity,
         unitPrice: asset.price,
-        amount: amount,
+        amount,
         imageUrl: asset.imageUrl,
         barcode: asset.barcode
       }

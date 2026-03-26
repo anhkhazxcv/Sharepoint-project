@@ -10,6 +10,7 @@ export default function ThanhLyTaiSan(props: IThanhLyTaiSanProps): React.ReactEl
         userDisplayName={props.userDisplayName}
         userEmail={props.userEmail}
         spHttpClient={props.spHttpClient}
+        siteUrl={props.siteUrl}
       />
     </section>
   );
