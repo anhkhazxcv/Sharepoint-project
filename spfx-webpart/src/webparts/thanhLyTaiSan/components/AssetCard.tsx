@@ -9,7 +9,7 @@ export interface IAssetCardProps {
   remainingLimit: number;
   isSubmitting?: boolean;
   onQuantityChange: (assetId: string, value: string) => void;
-  onRegister: (asset: IAssetItem) => void;
+  onAddToCart: (asset: IAssetItem) => void;
 }
 
 function formatCurrency(value: number): string {
@@ -35,7 +35,7 @@ function renderBarcodeBars(barcode: string): React.ReactNode {
 }
 
 export function AssetCard(props: IAssetCardProps): React.ReactElement {
-  const { asset, quantityValue, errorMessage, remainingLimit, isSubmitting, onQuantityChange, onRegister } = props;
+  const { asset, quantityValue, errorMessage, remainingLimit, isSubmitting, onQuantityChange, onAddToCart } = props;
   const [isImageBroken, setIsImageBroken] = React.useState<boolean>(false);
   const hasImage: boolean = !!asset.imageUrl;
 
@@ -48,7 +48,7 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
     parsedQuantity > 0 &&
     parsedQuantity <= asset.availableQuantity &&
     parsedQuantity <= remainingLimit;
-  const isRegisterDisabled: boolean = isSoldOut || !hasValidQuantity || !!errorMessage || remainingLimit === 0 || !!isSubmitting;
+  const isActionDisabled: boolean = isSoldOut || !hasValidQuantity || !!errorMessage || remainingLimit === 0 || !!isSubmitting;
 
   return (
     <article className={`${styles.card} ${isSoldOut ? styles.soldOutCard : ''}`}>
@@ -133,10 +133,10 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
         <button
           type="button"
           className={`${styles.actionButton} ${isSoldOut ? styles.actionDisabled : styles.actionActive}`}
-          disabled={isRegisterDisabled}
-          onClick={() => onRegister(asset)}
+          disabled={isActionDisabled}
+          onClick={() => onAddToCart(asset)}
         >
-          {isSoldOut ? 'Het hang' : isSubmitting ? 'Dang tao don...' : 'Dang ky mua'}
+          {isSoldOut ? 'Het hang' : isSubmitting ? 'Dang them...' : 'Them vao gio'}
         </button>
 
         {remainingLimit === 0 && !isSoldOut ? (

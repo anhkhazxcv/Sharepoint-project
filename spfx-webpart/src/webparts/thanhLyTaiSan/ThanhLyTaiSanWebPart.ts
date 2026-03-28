@@ -17,6 +17,8 @@ export interface IThanhLyTaiSanWebPartProps {
   siteUrl: string;
 }
 
+const DEFAULT_SITE_URL: string = 'https://masterisegroup.sharepoint.com/sites/ThanhLyTaiSan';
+
 export default class ThanhLyTaiSanWebPart extends BaseClientSideWebPart<IThanhLyTaiSanWebPartProps> {
 
   private _isDarkTheme: boolean = false;
@@ -33,7 +35,7 @@ export default class ThanhLyTaiSanWebPart extends BaseClientSideWebPart<IThanhLy
         userDisplayName: this.context.pageContext.user.displayName,
         userEmail: this.context.pageContext.user.email,
         spHttpClient: this.context.spHttpClient,
-        siteUrl: this.properties.siteUrl || this.context.pageContext.web.absoluteUrl
+        siteUrl: this.properties.siteUrl || DEFAULT_SITE_URL
       }
     );
 
@@ -41,6 +43,10 @@ export default class ThanhLyTaiSanWebPart extends BaseClientSideWebPart<IThanhLy
   }
 
   protected onInit(): Promise<void> {
+    if (!this.properties.siteUrl) {
+      this.properties.siteUrl = DEFAULT_SITE_URL;
+    }
+
     return this._getEnvironmentMessage().then(message => {
       this._environmentMessage = message;
     });

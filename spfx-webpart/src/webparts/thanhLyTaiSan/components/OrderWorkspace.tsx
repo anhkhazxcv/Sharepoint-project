@@ -1,17 +1,22 @@
 import * as React from 'react';
 import type { SPHttpClient } from '@microsoft/sp-http';
 import { AssetLiquidationPage } from './AssetLiquidationPage';
+import { CartPage } from './CartPage';
 import { OrderDetailPage } from './orderDetail/OrderDetailPage';
 import { OrderListPage } from './orderDetail/OrderListPage';
+import techcombankLogo from '../assets/techcombank-1.png';
 import type { IOrderDetail, IOrderItem } from './orderDetail/types';
 import type { IAssetItem } from './types';
 import {
   createPaymentHistoryItem,
   getTransactionsByUser,
+  type IUserTransactionLineRecord,
   type IUserTransactionRecord,
   updateAssetStock,
+  updateOrderPaymentStatus,
   updateTransactionStatus
 } from './services/orderTransactionService';
+import { buildVietQrImageUrl, getBankInfoFromSharePoint, type IBankInfoRecord } from './services/bankInfoService';
 import styles from './OrderWorkspace.module.scss';
 
 export interface IOrderWorkspaceProps {
@@ -21,7 +26,7 @@ export interface IOrderWorkspaceProps {
   siteUrl: string;
 }
 
-type TWorkspaceTab = 'register' | 'orders';
+type TWorkspaceTab = 'register' | 'cart' | 'orders';
 
 function createAssetPlaceholder(label: string): string {
   const svg: string =
@@ -34,19 +39,6 @@ function createAssetPlaceholder(label: string): string {
     "<text x='24' y='94' font-family='Segoe UI, Arial' font-size='10' font-weight='700' fill='#334155'>" +
     label.slice(0, 16) +
     '</text>' +
-    '</svg>';
-
-  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-}
-
-function createBankLogo(): string {
-  const svg: string =
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 92 92'>" +
-    "<rect width='92' height='92' rx='18' fill='#e7f0fb'/>" +
-    "<rect x='14' y='18' width='64' height='52' rx='12' fill='#0f4c81'/>" +
-    "<rect x='26' y='32' width='40' height='8' rx='4' fill='white' opacity='0.95'/>" +
-    "<rect x='26' y='48' width='28' height='6' rx='3' fill='white' opacity='0.7'/>" +
-    "<text x='24' y='82' font-family='Segoe UI, Arial' font-size='11' font-weight='700' fill='#0f2f57'>VCB</text>" +
     '</svg>';
 
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
@@ -73,77 +65,103 @@ function sanitizeBuyerName(buyerName: string): string {
   return (buyerName || 'CBNV').replace(/\s+/g, '').slice(0, 24);
 }
 
-function getOrderStateFromStatus(status: string): Pick<IOrderDetail, 'currentStep' | 'paymentStatus' | 'handoverStatus'> {
-  if (status === 'Da ban giao') {
+function padTwoDigits(value: number): string {
+  return value < 10 ? '0' + String(value) : String(value);
+}
+
+function getOrderStateFromStatuses(
+  paymentStatus: string,
+  handoverStatus: string
+): Pick<IOrderDetail, 'currentStep' | 'paymentStatus' | 'handoverStatus'> {
+  if (handoverStatus === 'Da ban giao') {
     return {
       currentStep: 'Hoàn tất',
-      paymentStatus: 'Da thanh toan',
+      paymentStatus: paymentStatus || 'Da thanh toan',
       handoverStatus: 'Da ban giao'
     };
   }
 
-  if (status === 'Da thanh toan') {
+  if (paymentStatus === 'Da thanh toan') {
     return {
       currentStep: 'Bàn giao',
       paymentStatus: 'Da thanh toan',
-      handoverStatus: 'Cho ban giao'
+      handoverStatus: handoverStatus || 'Cho ban giao'
     };
   }
 
   return {
     currentStep: 'Thanh toán',
-    paymentStatus: status || 'Cho xac nhan',
-    handoverStatus: 'Chua ban giao'
+    paymentStatus: paymentStatus || 'Cho xac nhan',
+    handoverStatus: handoverStatus || 'Chua ban giao'
   };
 }
 
-function mapTransactionRecordToOrderDetail(record: IUserTransactionRecord, assets: IAssetItem[]): IOrderDetail {
-  const matchedAsset: IAssetItem | undefined = assets.filter((asset: IAssetItem) => asset.assetCode === record.assetCode)[0];
-  const orderState = getOrderStateFromStatus(record.status);
+function mapLineRecordToOrderItem(
+  orderId: string,
+  line: IUserTransactionLineRecord,
+  assets: IAssetItem[],
+  index: number
+): IOrderItem {
+  const matchedAsset: IAssetItem | undefined = assets.filter((asset: IAssetItem) => asset.assetCode === line.productCode)[0];
+
+  return {
+    id: orderId + '-' + padTwoDigits(index + 1),
+    assetId: matchedAsset ? matchedAsset.id : line.productCode,
+    assetCode: line.productCode,
+    assetName: matchedAsset ? matchedAsset.assetName : line.productCode,
+    condition: matchedAsset ? matchedAsset.condition : 'Chua cap nhat',
+    site: matchedAsset ? matchedAsset.site : 'Chua cap nhat',
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    amount: line.lineTotal,
+    imageUrl: matchedAsset ? matchedAsset.imageUrl : createAssetPlaceholder(line.productCode),
+    barcode: matchedAsset ? matchedAsset.barcode : ''
+  };
+}
+
+function mapTransactionRecordToOrderDetail(
+  record: IUserTransactionRecord,
+  assets: IAssetItem[],
+  bankInfo: IBankInfoRecord | null
+): IOrderDetail {
+  const orderState = getOrderStateFromStatuses(record.paymentStatus, record.status);
   const compactBuyerName: string = sanitizeBuyerName(record.buyerName);
-  const totalAmount: number = record.totalAmount || record.quantity * record.unitPrice;
+  const orderItems: IOrderItem[] = record.items.map((line: IUserTransactionLineRecord, index: number) =>
+    mapLineRecordToOrderItem(record.orderId, line, assets, index)
+  );
+  const bankName: string = bankInfo ? bankInfo.bankName : 'Techcombank';
+  const accountName: string = bankInfo ? bankInfo.accountName : 'BAN HAN';
+  const accountNumber: string = bankInfo ? bankInfo.accountNumber : '';
+  const qrImageUrl: string =
+    bankInfo && bankInfo.accountNumber
+      ? buildVietQrImageUrl(bankInfo.qrBankSlug, bankInfo.accountNumber)
+      : createQrPlaceholder();
 
   return {
     orderId: record.orderId,
     orderCode: record.orderCode,
     buyerName: record.buyerName,
     purchaseDate: record.purchaseDate,
-    totalAmount,
+    totalAmount: record.totalAmount,
     currentStep: orderState.currentStep,
     paymentStatus: orderState.paymentStatus,
     handoverStatus: orderState.handoverStatus,
     bankAccount: {
-      bankName: 'Vietcombank',
-      accountName: 'BAN HAN',
-      accountNumber: '891260009',
-      logoUrl: createBankLogo()
+      bankName: bankName,
+      accountName: accountName,
+      accountNumber: accountNumber,
+      logoUrl: techcombankLogo
     },
     paymentQr: {
-      qrImageUrl: createQrPlaceholder(),
+      qrImageUrl: qrImageUrl,
       transferContent: 'TT ' + record.orderCode + ' ' + compactBuyerName,
-      amount: totalAmount
+      amount: record.totalAmount
     },
-    items: [
-      {
-        id: record.orderId + '-01',
-        assetId: matchedAsset ? matchedAsset.id : record.assetCode,
-        assetCode: record.assetCode,
-        assetName: matchedAsset ? matchedAsset.assetName : record.assetName,
-        condition: matchedAsset ? matchedAsset.condition : 'Chua cap nhat',
-        site: matchedAsset ? matchedAsset.site : 'Chua cap nhat',
-        quantity: record.quantity,
-        unitPrice: record.unitPrice,
-        amount: totalAmount,
-        imageUrl: matchedAsset ? matchedAsset.imageUrl : createAssetPlaceholder(record.assetName),
-        barcode: matchedAsset ? matchedAsset.barcode : ''
-      }
-    ]
+    items: orderItems
   };
 }
 
 function mapOrderDetailToTransactionRecord(orderDetail: IOrderDetail, userEmail: string): IUserTransactionRecord {
-  const firstItem: IOrderItem | undefined = orderDetail.items[0];
-
   return {
     orderId: orderDetail.orderId,
     orderCode: orderDetail.orderCode,
@@ -151,11 +169,15 @@ function mapOrderDetailToTransactionRecord(orderDetail: IOrderDetail, userEmail:
     buyerEmail: userEmail,
     purchaseDate: orderDetail.purchaseDate,
     totalAmount: orderDetail.totalAmount,
-    quantity: firstItem ? firstItem.quantity : 0,
-    unitPrice: firstItem ? firstItem.unitPrice : 0,
-    assetCode: firstItem ? firstItem.assetCode : '',
-    assetName: firstItem ? firstItem.assetName : 'Chua co ten tai san',
-    status: orderDetail.paymentStatus
+    totalQuantity: orderDetail.items.reduce((sum: number, item: IOrderItem) => sum + item.quantity, 0),
+    status: orderDetail.handoverStatus,
+    paymentStatus: orderDetail.paymentStatus,
+    items: orderDetail.items.map((item: IOrderItem): IUserTransactionLineRecord => ({
+      productCode: item.assetCode,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      lineTotal: item.amount
+    }))
   };
 }
 
@@ -164,6 +186,7 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
   const [transactionRecords, setTransactionRecords] = React.useState<IUserTransactionRecord[]>([]);
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(null);
   const [assets, setAssets] = React.useState<IAssetItem[]>([]);
+  const [bankInfo, setBankInfo] = React.useState<IBankInfoRecord | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState<boolean>(false);
 
   React.useEffect(() => {
@@ -177,15 +200,26 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       });
   }, [props.siteUrl, props.spHttpClient, props.userEmail]);
 
+  React.useEffect(() => {
+    getBankInfoFromSharePoint(props.siteUrl, props.spHttpClient)
+      .then((record: IBankInfoRecord | null): void => {
+        setBankInfo(record);
+      })
+      .catch((error: Error): void => {
+        // eslint-disable-next-line no-console
+        console.error('Khong the tai thong tin ngan hang', error);
+      });
+  }, [props.siteUrl, props.spHttpClient]);
+
   const orders: IOrderDetail[] = React.useMemo((): IOrderDetail[] => {
     return transactionRecords.map((record: IUserTransactionRecord): IOrderDetail => {
-      return mapTransactionRecordToOrderDetail(record, assets);
+      return mapTransactionRecordToOrderDetail(record, assets, bankInfo);
     });
-  }, [assets, transactionRecords]);
+  }, [assets, bankInfo, transactionRecords]);
 
   const purchasedCount: number = React.useMemo((): number => {
     return transactionRecords.reduce((total: number, record: IUserTransactionRecord): number => {
-      return total + record.quantity;
+      return total + record.totalQuantity;
     }, 0);
   }, [transactionRecords]);
 
@@ -221,72 +255,108 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
     });
   }
 
+  function updatePaymentStatusInState(orderId: string, paymentStatus: string): void {
+    setTransactionRecords((prevRecords: IUserTransactionRecord[]): IUserTransactionRecord[] => {
+      return prevRecords.map((record: IUserTransactionRecord): IUserTransactionRecord => {
+        if (record.orderId !== orderId) {
+          return record;
+        }
+
+        return {
+          ...record,
+          paymentStatus
+        };
+      });
+    });
+  }
+
   function handleConfirmPayment(orderId: string): void {
     const targetOrder: IOrderDetail | null = getOrderById(orderId);
-    const firstItem: IOrderItem | null = targetOrder && targetOrder.items.length ? targetOrder.items[0] : null;
 
-    if (!targetOrder || !firstItem) {
+    if (!targetOrder || !targetOrder.items.length) {
       return;
     }
 
-    const confirmedOrder: IOrderDetail = targetOrder;
-    const confirmedItem: IOrderItem = firstItem;
-    const matchedAssets: IAssetItem[] = assets.filter((asset: IAssetItem) => {
-      return asset.id === confirmedItem.assetId || asset.assetCode === confirmedItem.assetCode;
-    });
+    const stockUpdates: Array<{ assetId: string; nextStock: number }> = [];
 
-    if (!matchedAssets.length) {
-      window.alert('Khong tim thay tai san de tru ton.');
-      return;
-    }
+    for (let index: number = 0; index < targetOrder.items.length; index += 1) {
+      const orderItem: IOrderItem = targetOrder.items[index];
+      const matchedAsset: IAssetItem | undefined = assets.filter((asset: IAssetItem) => {
+        return asset.id === orderItem.assetId || asset.assetCode === orderItem.assetCode;
+      })[0];
 
-    const confirmedAsset: IAssetItem = matchedAssets[0];
-    const nextStock: number = confirmedAsset.availableQuantity - confirmedItem.quantity;
+      if (!matchedAsset) {
+        window.alert('Khong tim thay tai san de tru ton: ' + orderItem.assetCode);
+        return;
+      }
 
-    if (nextStock < 0) {
-      window.alert('So luong ton hien tai khong du de xac nhan thanh toan.');
-      return;
+      const nextStock: number = matchedAsset.availableQuantity - orderItem.quantity;
+
+      if (nextStock < 0) {
+        window.alert('So luong ton hien tai khong du de xac nhan thanh toan.');
+        return;
+      }
+
+      stockUpdates.push({
+        assetId: matchedAsset.id,
+        nextStock
+      });
     }
 
     createPaymentHistoryItem({
       siteUrl: props.siteUrl,
       spHttpClient: props.spHttpClient,
-      transferContent: confirmedOrder.paymentQr.transferContent,
+      transferContent: targetOrder.paymentQr.transferContent,
       paymentConfirmedAt: new Date().toISOString()
     })
+      .then((): Promise<void> => {
+        return updateOrderPaymentStatus({
+          siteUrl: props.siteUrl,
+          spHttpClient: props.spHttpClient,
+          orderId: targetOrder.orderCode,
+          paymentStatus: 'Da thanh toan'
+        });
+      })
       .then((): Promise<void> => {
         return updateTransactionStatus({
           siteUrl: props.siteUrl,
           spHttpClient: props.spHttpClient,
-          orderId: confirmedOrder.orderCode,
-          status: 'Da thanh toan'
+          orderId: targetOrder.orderCode,
+          status: 'Cho ban giao'
         });
       })
-      .then((): Promise<void> => {
-        return updateAssetStock({
-          siteUrl: props.siteUrl,
-          spHttpClient: props.spHttpClient,
-          assetItemId: confirmedAsset.id,
-          nextStock
-        });
+      .then((): Promise<void[]> => {
+        return Promise.all(
+          stockUpdates.map((stockUpdate) =>
+            updateAssetStock({
+              siteUrl: props.siteUrl,
+              spHttpClient: props.spHttpClient,
+              assetItemId: stockUpdate.assetId,
+              nextStock: stockUpdate.nextStock
+            })
+          )
+        );
       })
       .then((): void => {
         setAssets((prevAssets: IAssetItem[]): IAssetItem[] => {
           return prevAssets.map((asset: IAssetItem): IAssetItem => {
-            if (asset.id !== confirmedAsset.id) {
+            const matchedUpdate = stockUpdates.filter((stockUpdate) => stockUpdate.assetId === asset.id)[0];
+
+            if (!matchedUpdate) {
               return asset;
             }
 
             return {
               ...asset,
-              totalQuantity: nextStock,
-              availableQuantity: nextStock,
-              statusText: nextStock > 0 ? 'Con hang' : 'Het hang'
+              totalQuantity: matchedUpdate.nextStock,
+              availableQuantity: matchedUpdate.nextStock,
+              statusText: matchedUpdate.nextStock > 0 ? 'Con hang' : 'Het hang'
             };
           });
         });
 
-        updateTransactionStatusInState(orderId, 'Da thanh toan');
+        updatePaymentStatusInState(orderId, 'Da thanh toan');
+        updateTransactionStatusInState(orderId, 'Cho ban giao');
       })
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console
@@ -381,6 +451,32 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
               className={
                 styles.menuButton +
                 ' ' +
+                (activeTab === 'cart' ? styles.menuButtonActive : '') +
+                ' ' +
+                (isSidebarCollapsed ? styles.menuButtonCollapsed : '')
+              }
+              onClick={(): void => {
+                setActiveTab('cart');
+              }}
+              aria-label="Gio hang"
+              title="Gio hang"
+            >
+              <span className={styles.menuIcon} aria-hidden="true">
+                C
+              </span>
+              {!isSidebarCollapsed && (
+                <span className={styles.menuText}>
+                  <span className={styles.menuLabel}>Gio hang</span>
+                  <span className={styles.menuHint}>Quan ly cac san pham da them vao gio</span>
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className={
+                styles.menuButton +
+                ' ' +
                 (activeTab === 'orders' ? styles.menuButtonActive : '') +
                 ' ' +
                 (isSidebarCollapsed ? styles.menuButtonCollapsed : '')
@@ -411,6 +507,15 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
               siteUrl={props.siteUrl}
               purchasedCount={purchasedCount}
               onAssetsLoaded={handleAssetsLoaded}
+              onPurchaseSuccess={handlePurchaseSuccess}
+            />
+          ) : activeTab === 'cart' ? (
+            <CartPage
+              userDisplayName={props.userDisplayName}
+              userEmail={props.userEmail}
+              spHttpClient={props.spHttpClient}
+              siteUrl={props.siteUrl}
+              purchasedCount={purchasedCount}
               onPurchaseSuccess={handlePurchaseSuccess}
             />
           ) : selectedOrder ? (

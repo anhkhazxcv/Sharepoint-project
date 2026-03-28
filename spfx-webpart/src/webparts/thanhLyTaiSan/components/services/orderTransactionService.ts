@@ -1,8 +1,9 @@
 import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
-import type { IOrderDetail } from '../orderDetail/types';
+import type { IOrderDetail, IOrderItem } from '../orderDetail/types';
 
-const ASSET_LIST_TITLE: string = 'lstDanhMucTaiSan';
-const TRANSACTION_LIST_TITLE: string = 'lstGiaoDich';
+const ASSET_LIST_TITLE: string = 'lstSanPham';
+const ORDER_LIST_TITLE: string = 'lstDonHang';
+const ORDER_DETAIL_LIST_TITLE: string = 'lstChiTietDonHang';
 const PAYMENT_HISTORY_LIST_TITLE: string = 'lstThanhToan';
 let lastGeneratedOrderId: string = '';
 
@@ -28,11 +29,25 @@ export interface IUpdateTransactionStatusOptions {
   status: string;
 }
 
+export interface IUpdateOrderPaymentStatusOptions {
+  siteUrl: string;
+  spHttpClient: SPHttpClient;
+  orderId: string;
+  paymentStatus: string;
+}
+
 export interface IUpdateAssetStockOptions {
   siteUrl: string;
   spHttpClient: SPHttpClient;
   assetItemId: string;
   nextStock: number;
+}
+
+export interface IUserTransactionLineRecord {
+  productCode: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
 }
 
 export interface IUserTransactionRecord {
@@ -42,14 +57,13 @@ export interface IUserTransactionRecord {
   buyerEmail: string;
   purchaseDate: string;
   totalAmount: number;
-  quantity: number;
-  unitPrice: number;
-  assetCode: string;
-  assetName: string;
+  totalQuantity: number;
   status: string;
+  paymentStatus: string;
+  items: IUserTransactionLineRecord[];
 }
 
-type TSharePointTransactionItem = Record<string, unknown>;
+type TSharePointItem = Record<string, unknown>;
 
 function createTwelveDigitCandidate(): string {
   const timestampPart: string = ('000000000' + String(Date.now())).slice(-9);
@@ -66,7 +80,46 @@ function createTwelveDigitCandidate(): string {
   return candidate;
 }
 
-async function postListItem(siteUrl: string, spHttpClient: SPHttpClient, listTitle: string, payload: Record<string, unknown>): Promise<void> {
+function getStringValue(item: TSharePointItem, candidates: string[], fallback: string = ''): string {
+  for (let index: number = 0; index < candidates.length; index += 1) {
+    const candidate: string = candidates[index];
+    const value: unknown = item[candidate];
+
+    if (typeof value === 'string' && value.trim() !== '') {
+      return value.trim();
+    }
+  }
+
+  return fallback;
+}
+
+function getNumberValue(item: TSharePointItem, candidates: string[], fallback: number = 0): number {
+  for (let index: number = 0; index < candidates.length; index += 1) {
+    const candidate: string = candidates[index];
+    const value: unknown = item[candidate];
+
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    if (typeof value === 'string' && value.trim() !== '') {
+      const parsedValue: number = Number(value);
+
+      if (!isNaN(parsedValue)) {
+        return parsedValue;
+      }
+    }
+  }
+
+  return fallback;
+}
+
+async function postListItem(
+  siteUrl: string,
+  spHttpClient: SPHttpClient,
+  listTitle: string,
+  payload: Record<string, unknown>
+): Promise<void> {
   const requestUrl: string =
     siteUrl.replace(/\/$/, '') +
     "/_api/web/lists/getbytitle('" +
@@ -126,61 +179,6 @@ async function getListItemByFilter(
   return json.value[0];
 }
 
-function getStringValue(item: TSharePointTransactionItem, candidates: string[], fallback: string = ''): string {
-  for (let index: number = 0; index < candidates.length; index += 1) {
-    const candidate: string = candidates[index];
-    const value: unknown = item[candidate];
-
-    if (typeof value === 'string' && value.trim() !== '') {
-      return value.trim();
-    }
-  }
-
-  return fallback;
-}
-
-function getNumberValue(item: TSharePointTransactionItem, candidates: string[], fallback: number = 0): number {
-  for (let index: number = 0; index < candidates.length; index += 1) {
-    const candidate: string = candidates[index];
-    const value: unknown = item[candidate];
-
-    if (typeof value === 'number') {
-      return value;
-    }
-
-    if (typeof value === 'string' && value.trim() !== '') {
-      const parsedValue: number = Number(value);
-
-      if (!isNaN(parsedValue)) {
-        return parsedValue;
-      }
-    }
-  }
-
-  return fallback;
-}
-
-function mapTransactionItem(item: TSharePointTransactionItem): IUserTransactionRecord {
-  const orderCode: string = getStringValue(item, ['Title', 'OrderCode'], 'N/A');
-  const quantity: number = getNumberValue(item, ['Quantity'], 0);
-  const unitPrice: number = getNumberValue(item, ['UnitPrice'], 0);
-  const totalAmount: number = getNumberValue(item, ['Total'], quantity * unitPrice);
-
-  return {
-    orderId: orderCode,
-    orderCode,
-    buyerName: getStringValue(item, ['EmployeeName', 'BuyerName'], 'Chua cap nhat'),
-    buyerEmail: getStringValue(item, ['EmployeeEmail', 'BuyerEmail'], ''),
-    purchaseDate: getStringValue(item, ['PurchaseDate', 'Created'], new Date().toISOString()),
-    totalAmount,
-    quantity,
-    unitPrice,
-    assetCode: getStringValue(item, ['AssetCode'], ''),
-    assetName: getStringValue(item, ['AssetName'], 'Chua co ten tai san'),
-    status: getStringValue(item, ['Status'], 'Cho xac nhan')
-  };
-}
-
 async function updateListItemById(
   siteUrl: string,
   spHttpClient: SPHttpClient,
@@ -215,24 +213,80 @@ async function updateListItemById(
   }
 }
 
-export async function createTransactionItem(options: ICreateTransactionOptions): Promise<void> {
-  const firstItem = options.orderDetail.items[0];
+async function getListItems(
+  siteUrl: string,
+  spHttpClient: SPHttpClient,
+  listTitle: string,
+  selectFields: string[],
+  filterQuery?: string
+): Promise<TSharePointItem[]> {
+  const requestUrl: string =
+    siteUrl.replace(/\/$/, '') +
+    "/_api/web/lists/getbytitle('" +
+    encodeURIComponent(listTitle) +
+    "')/items?$top=5000&$select=" +
+    selectFields.join(',') +
+    (filterQuery ? '&$filter=' + encodeURIComponent(filterQuery) : '');
+  const response: SPHttpClientResponse = await spHttpClient.get(
+    requestUrl,
+    SPHttpClient.configurations.v1,
+    {
+      headers: {
+        Accept: 'application/json;odata.metadata=none'
+      }
+    }
+  );
 
-  if (!firstItem) {
+  if (!response.ok) {
+    const errorText: string = await response.text();
+    throw new Error('Khong the doc du lieu tu SharePoint list ' + listTitle + '. Response: ' + errorText);
+  }
+
+  const json: { value?: TSharePointItem[] } = (await response.json()) as { value?: TSharePointItem[] };
+  return Array.isArray(json.value) ? json.value : [];
+}
+
+function escapeODataValue(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+function buildOrFilter(fieldName: string, values: string[]): string {
+  return values
+    .map((value: string) => fieldName + " eq '" + escapeODataValue(value) + "'")
+    .join(' or ');
+}
+
+export async function createTransactionItem(options: ICreateTransactionOptions): Promise<void> {
+  const items: IOrderItem[] = options.orderDetail.items;
+  const totalQuantity: number = items.reduce((sum: number, item: IOrderItem) => sum + item.quantity, 0);
+
+  if (!items.length) {
     throw new Error('Khong co san pham trong don hang de tao giao dich.');
   }
 
-  await postListItem(options.siteUrl, options.spHttpClient, TRANSACTION_LIST_TITLE, {
-    Title: options.orderDetail.orderCode,
+  await postListItem(options.siteUrl, options.spHttpClient, ORDER_LIST_TITLE, {
+    OrderId: options.orderDetail.orderCode,
     EmployeeName: options.buyerName,
     EmployeeEmail: options.buyerEmail,
-    AssetCode: firstItem.assetCode,
-    AssetName: firstItem.assetName,
-    Quantity: firstItem.quantity,
-    UnitPrice: firstItem.unitPrice,
-    Total: firstItem.amount,
-    Status: options.orderDetail.paymentStatus
+    OrderDate: options.orderDetail.purchaseDate,
+    TotalQuantity: totalQuantity,
+    TotalAmount: options.orderDetail.totalAmount,
+    Status: options.orderDetail.handoverStatus,
+    PaymentStatus: options.orderDetail.paymentStatus,
+    Note: 'Created from cart'
   });
+
+  await Promise.all(
+    items.map((item: IOrderItem) =>
+      postListItem(options.siteUrl, options.spHttpClient, ORDER_DETAIL_LIST_TITLE, {
+        OrderId: options.orderDetail.orderCode,
+        ProductCode: item.assetCode,
+        Quantity: item.quantity,
+        UnitPrice: item.unitPrice,
+        LineTotal: item.amount
+      })
+    )
+  );
 }
 
 export async function generateUniqueOrderId(siteUrl: string, spHttpClient: SPHttpClient): Promise<string> {
@@ -243,8 +297,8 @@ export async function generateUniqueOrderId(siteUrl: string, spHttpClient: SPHtt
     const existingItem = await getListItemByFilter(
       siteUrl,
       spHttpClient,
-      TRANSACTION_LIST_TITLE,
-      "Title eq '" + candidate + "'"
+      ORDER_LIST_TITLE,
+      "OrderId eq '" + escapeODataValue(candidate) + "'"
     );
 
     if (!existingItem) {
@@ -262,33 +316,65 @@ export async function getTransactionsByUser(
   spHttpClient: SPHttpClient,
   userEmail: string
 ): Promise<IUserTransactionRecord[]> {
-  const normalizedSiteUrl: string = siteUrl.replace(/\/$/, '');
-  const escapedEmail: string = userEmail.replace(/'/g, "''");
-  const requestUrl: string =
-    normalizedSiteUrl +
-    "/_api/web/lists/getbytitle('" +
-    encodeURIComponent(TRANSACTION_LIST_TITLE) +
-    "')/items?$top=5000&$select=Title,EmployeeName,EmployeeEmail,AssetCode,AssetName,Quantity,UnitPrice,Total,Status,Created&$orderby=Created desc&$filter=" +
-    encodeURIComponent("EmployeeEmail eq '" + escapedEmail + "'");
-  const response: SPHttpClientResponse = await spHttpClient.get(
-    requestUrl,
-    SPHttpClient.configurations.v1,
-    {
-      headers: {
-        Accept: 'application/json;odata.metadata=none'
-      }
-    }
+  const escapedEmail: string = escapeODataValue(userEmail);
+  const orderHeaders: TSharePointItem[] = await getListItems(
+    siteUrl,
+    spHttpClient,
+    ORDER_LIST_TITLE,
+    ['OrderId', 'EmployeeName', 'EmployeeEmail', 'OrderDate', 'TotalQuantity', 'TotalAmount', 'Status', 'PaymentStatus', 'Id'],
+    "EmployeeEmail eq '" + escapedEmail + "'"
   );
 
-  if (!response.ok) {
-    const errorText: string = await response.text();
-    throw new Error('Khong the doc lich su giao dich cua nguoi dung. Response: ' + errorText);
+  if (!orderHeaders.length) {
+    return [];
   }
 
-  const json: { value?: TSharePointTransactionItem[] } = (await response.json()) as { value?: TSharePointTransactionItem[] };
-  const items: TSharePointTransactionItem[] = Array.isArray(json.value) ? json.value : [];
+  const orderIds: string[] = orderHeaders
+    .map((item: TSharePointItem) => getStringValue(item, ['OrderId']))
+    .filter((value: string) => !!value);
 
-  return items.map(mapTransactionItem);
+  const orderDetailItems: TSharePointItem[] = orderIds.length
+    ? await getListItems(
+        siteUrl,
+        spHttpClient,
+        ORDER_DETAIL_LIST_TITLE,
+        ['OrderId', 'ProductCode', 'Quantity', 'UnitPrice', 'LineTotal'],
+        buildOrFilter('OrderId', orderIds)
+      )
+    : [];
+
+  const detailMap: Record<string, IUserTransactionLineRecord[]> = {};
+  orderDetailItems.forEach((item: TSharePointItem) => {
+    const orderId: string = getStringValue(item, ['OrderId']);
+
+    if (!detailMap[orderId]) {
+      detailMap[orderId] = [];
+    }
+
+    detailMap[orderId].push({
+      productCode: getStringValue(item, ['ProductCode']),
+      quantity: getNumberValue(item, ['Quantity'], 0),
+      unitPrice: getNumberValue(item, ['UnitPrice'], 0),
+      lineTotal: getNumberValue(item, ['LineTotal'], 0)
+    });
+  });
+
+  return orderHeaders.map((item: TSharePointItem): IUserTransactionRecord => {
+    const orderId: string = getStringValue(item, ['OrderId'], 'N/A');
+
+    return {
+      orderId,
+      orderCode: orderId,
+      buyerName: getStringValue(item, ['EmployeeName'], 'Chua cap nhat'),
+      buyerEmail: getStringValue(item, ['EmployeeEmail'], ''),
+      purchaseDate: getStringValue(item, ['OrderDate', 'Created'], new Date().toISOString()),
+      totalAmount: getNumberValue(item, ['TotalAmount'], 0),
+      totalQuantity: getNumberValue(item, ['TotalQuantity'], 0),
+      status: getStringValue(item, ['Status'], 'Chua ban giao'),
+      paymentStatus: getStringValue(item, ['PaymentStatus'], 'Cho xac nhan'),
+      items: detailMap[orderId] || []
+    };
+  });
 }
 
 export async function createPaymentHistoryItem(options: ICreatePaymentHistoryOptions): Promise<void> {
@@ -309,20 +395,36 @@ export async function createPaymentHistoryItem(options: ICreatePaymentHistoryOpt
 }
 
 export async function updateTransactionStatus(options: IUpdateTransactionStatusOptions): Promise<void> {
-  const orderId: string = options.orderId.replace(/'/g, "''");
   const listItem = await getListItemByFilter(
     options.siteUrl,
     options.spHttpClient,
-    TRANSACTION_LIST_TITLE,
-    "Title eq '" + orderId + "'"
+    ORDER_LIST_TITLE,
+    "OrderId eq '" + escapeODataValue(options.orderId) + "'"
   );
 
   if (!listItem) {
-    throw new Error('Khong tim thay giao dich de cap nhat trang thai.');
+    throw new Error('Khong tim thay don hang de cap nhat trang thai.');
   }
 
-  await updateListItemById(options.siteUrl, options.spHttpClient, TRANSACTION_LIST_TITLE, listItem.Id, {
+  await updateListItemById(options.siteUrl, options.spHttpClient, ORDER_LIST_TITLE, listItem.Id, {
     Status: options.status
+  });
+}
+
+export async function updateOrderPaymentStatus(options: IUpdateOrderPaymentStatusOptions): Promise<void> {
+  const listItem = await getListItemByFilter(
+    options.siteUrl,
+    options.spHttpClient,
+    ORDER_LIST_TITLE,
+    "OrderId eq '" + escapeODataValue(options.orderId) + "'"
+  );
+
+  if (!listItem) {
+    throw new Error('Khong tim thay don hang de cap nhat thanh toan.');
+  }
+
+  await updateListItemById(options.siteUrl, options.spHttpClient, ORDER_LIST_TITLE, listItem.Id, {
+    PaymentStatus: options.paymentStatus
   });
 }
 

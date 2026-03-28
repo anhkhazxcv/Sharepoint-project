@@ -1,5 +1,6 @@
 import type { IOrderDetail } from './types';
-import type { IAssetItem } from '../types';
+import type { IAssetItem, ICartItem } from '../types';
+import techcombankLogo from '../../assets/techcombank-1.png';
 
 function createAssetImage(label: string, accent: string, background: string): string {
   const svg: string =
@@ -12,21 +13,6 @@ function createAssetImage(label: string, accent: string, background: string): st
     "<rect x='24' y='74' width='68' height='6' rx='3' fill='#94a3b8' opacity='0.6'/>" +
     "<text x='24' y='97' font-family='Segoe UI, Arial' font-size='11' font-weight='700' fill='#1e293b'>" +
     label +
-    '</text>' +
-    '</svg>';
-
-  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-}
-
-function createBankLogo(bankName: string): string {
-  const svg: string =
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 92 92'>" +
-    "<rect width='92' height='92' rx='18' fill='#e7f0fb'/>" +
-    "<rect x='14' y='18' width='64' height='52' rx='12' fill='#0f4c81'/>" +
-    "<rect x='26' y='32' width='40' height='8' rx='4' fill='white' opacity='0.95'/>" +
-    "<rect x='26' y='48' width='28' height='6' rx='3' fill='white' opacity='0.7'/>" +
-    "<text x='16' y='82' font-family='Segoe UI, Arial' font-size='11' font-weight='700' fill='#0f2f57'>" +
-    bankName +
     '</text>' +
     '</svg>';
 
@@ -70,6 +56,10 @@ function sanitizeBuyerName(buyerName: string): string {
   return (buyerName || 'CBNV').replace(/\s+/g, '').slice(0, 24);
 }
 
+function padTwoDigits(value: number): string {
+  return value < 10 ? '0' + String(value) : String(value);
+}
+
 export const mockOrderDetail: IOrderDetail = {
   orderId: '100000000001',
   orderCode: '100000000001',
@@ -83,7 +73,7 @@ export const mockOrderDetail: IOrderDetail = {
     bankName: 'Vietcombank',
     accountName: 'BAN HAN',
     accountNumber: '891260009',
-    logoUrl: createBankLogo('VCB')
+    logoUrl: techcombankLogo
   },
   paymentQr: {
     qrImageUrl: createQrPlaceholder(),
@@ -103,18 +93,30 @@ export const mockOrderDetail: IOrderDetail = {
       amount: 15000000,
       imageUrl: createAssetImage('Dell XPS', '#1d4ed8', '#e7f0ff'),
       barcode: '893850100001'
+    },
+    {
+      id: '10000000000102',
+      assetId: '2',
+      assetCode: 'TS002',
+      assetName: 'Man hinh Dell 24"',
+      condition: 'Tot',
+      site: 'Ha Noi',
+      quantity: 1,
+      unitPrice: 6000000,
+      amount: 6000000,
+      imageUrl: createAssetImage('Dell 24', '#0f766e', '#e6fffa'),
+      barcode: '893850100002'
     }
   ]
 };
 
-export function createOrderDetailFromPurchase(
-  asset: IAssetItem,
-  quantity: number,
+export function createOrderDetailFromCartItems(
+  items: ICartItem[],
   buyerName: string,
   orderId: string
 ): IOrderDetail {
   const now: Date = new Date();
-  const amount: number = asset.price * quantity;
+  const totalAmount: number = items.reduce((sum: number, item: ICartItem) => sum + item.lineTotal, 0);
   const compactBuyerName: string = sanitizeBuyerName(buyerName);
 
   return {
@@ -122,7 +124,7 @@ export function createOrderDetailFromPurchase(
     orderCode: orderId,
     buyerName,
     purchaseDate: now.toISOString(),
-    totalAmount: amount,
+    totalAmount,
     currentStep: 'Thanh toán',
     paymentStatus: 'Chờ xác nhận',
     handoverStatus: 'Chưa bàn giao',
@@ -130,27 +132,53 @@ export function createOrderDetailFromPurchase(
       bankName: 'Vietcombank',
       accountName: 'BAN HAN',
       accountNumber: '891260009',
-      logoUrl: createBankLogo('VCB')
+      logoUrl: techcombankLogo
     },
     paymentQr: {
       qrImageUrl: createQrPlaceholder(),
       transferContent: 'TT ' + orderId + ' ' + compactBuyerName,
-      amount
+      amount: totalAmount
     },
-    items: [
+    items: items.map((item: ICartItem, index: number) => ({
+      id: orderId + padTwoDigits(index + 1),
+      assetId: item.assetId,
+      assetCode: item.productCode,
+      assetName: item.assetName,
+      condition: item.condition,
+      site: item.site,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      amount: item.lineTotal,
+      imageUrl: item.imageUrl,
+      barcode: item.barcode
+    }))
+  };
+}
+
+export function createOrderDetailFromPurchase(
+  asset: IAssetItem,
+  quantity: number,
+  buyerName: string,
+  orderId: string
+): IOrderDetail {
+  return createOrderDetailFromCartItems(
+    [
       {
-        id: orderId + '01',
+        productCode: asset.assetCode,
         assetId: asset.id,
-        assetCode: asset.assetCode,
         assetName: asset.assetName,
+        category: asset.category,
         condition: asset.condition,
         site: asset.site,
         quantity,
         unitPrice: asset.price,
-        amount,
+        lineTotal: asset.price * quantity,
         imageUrl: asset.imageUrl,
-        barcode: asset.barcode
+        barcode: asset.barcode,
+        availableQuantity: asset.availableQuantity
       }
-    ]
-  };
+    ],
+    buyerName,
+    orderId
+  );
 }

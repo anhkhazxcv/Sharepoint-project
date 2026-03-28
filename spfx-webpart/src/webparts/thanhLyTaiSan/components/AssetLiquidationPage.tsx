@@ -2,11 +2,10 @@ import * as React from 'react';
 import type { SPHttpClient } from '@microsoft/sp-http';
 import { AssetGrid } from './AssetGrid';
 import { FilterBar } from './FilterBar';
-import type { IAssetFilters, IAssetItem, IPurchasePayload } from './types';
-import { createOrderDetailFromPurchase } from './orderDetail/mockOrderDetail';
-import type { IOrderDetail } from './orderDetail/types';
+import type { IAssetFilters, IAssetItem, ICartItem } from './types';
 import { getAssetsFromSharePoint } from './services/assetCatalogService';
-import { createTransactionItem, generateUniqueOrderId } from './services/orderTransactionService';
+import type { IOrderDetail } from './orderDetail/types';
+import { getCartItemsByUser, upsertCartItem } from './services/cartService';
 import styles from './AssetLiquidationPage.module.scss';
 
 export interface IAssetLiquidationPageProps {
@@ -26,7 +25,7 @@ const defaultFilters: IAssetFilters = {
 };
 
 const PAGE_SIZE_OPTIONS: number[] = [10, 20, 50];
-const SHAREPOINT_LIST_TITLE: string = 'lstDanhMucTaiSan';
+const SHAREPOINT_LIST_TITLE: string = 'lstSanPham';
 const PURCHASE_LIMIT: number = 5;
 const MAX_SHAREPOINT_RETRIES: number = 5;
 
@@ -66,6 +65,36 @@ function getUniqueValues(items: IAssetItem[], key: keyof IAssetItem): string[] {
   return results;
 }
 
+function formatCartItems(
+  assets: IAssetItem[],
+  cartRecords: Array<{ productCode: string; quantity: number; unitPrice: number; lineTotal: number }>
+): ICartItem[] {
+  return cartRecords
+    .map((record) => {
+      const matchedAsset: IAssetItem | undefined = assets.filter((asset: IAssetItem) => asset.assetCode === record.productCode)[0];
+
+      if (!matchedAsset) {
+        return undefined;
+      }
+
+      return {
+        productCode: record.productCode,
+        assetId: matchedAsset.id,
+        assetName: matchedAsset.assetName,
+        category: matchedAsset.category,
+        condition: matchedAsset.condition,
+        site: matchedAsset.site,
+        quantity: record.quantity,
+        unitPrice: record.unitPrice,
+        lineTotal: record.lineTotal,
+        imageUrl: matchedAsset.imageUrl,
+        barcode: matchedAsset.barcode,
+        availableQuantity: matchedAsset.availableQuantity
+      };
+    })
+    .filter((item): item is ICartItem => !!item);
+}
+
 export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.ReactElement {
   const displayName: string = props.userDisplayName || '';
   const [assets, setAssets] = React.useState<IAssetItem[]>([]);
@@ -78,13 +107,27 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
   const [isLoadingAssets, setIsLoadingAssets] = React.useState<boolean>(true);
   const [assetLoadError, setAssetLoadError] = React.useState<string>('');
   const [submittingAssetIds, setSubmittingAssetIds] = React.useState<Record<string, boolean>>({});
-  const submittingAssetIdsRef = React.useRef<Record<string, boolean>>({});
+  const [cartItems, setCartItems] = React.useState<ICartItem[]>([]);
 
   const categories: string[] = React.useMemo(() => getUniqueValues(assets, 'category'), [assets]);
   const conditions: string[] = React.useMemo(() => getUniqueValues(assets, 'condition'), [assets]);
   const sites: string[] = React.useMemo(() => getUniqueValues(assets, 'site'), [assets]);
 
   const remainingLimit: number = Math.max(PURCHASE_LIMIT - props.purchasedCount, 0);
+  const cartQuantity: number = React.useMemo(
+    () => cartItems.reduce((sum: number, item: ICartItem) => sum + item.quantity, 0),
+    [cartItems]
+  );
+
+  const loadCartItems = React.useCallback(
+    (assetSource: IAssetItem[]) => {
+      return getCartItemsByUser(props.siteUrl, props.spHttpClient, props.userEmail).then((records) => {
+        const nextCartItems: ICartItem[] = formatCartItems(assetSource, records);
+        setCartItems(nextCartItems);
+      });
+    },
+    [props.siteUrl, props.spHttpClient, props.userEmail]
+  );
 
   React.useEffect(() => {
     let isMounted: boolean = true;
@@ -102,15 +145,29 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
         spHttpClient: props.spHttpClient
       })
         .then((items: IAssetItem[]) => {
-          if (isMounted) {
-            // eslint-disable-next-line no-console
-            console.log('AssetLiquidationPage fetched assets:', items);
-            setAssets(items);
-            if (props.onAssetsLoaded) {
-              props.onAssetsLoaded(items);
-            }
-            setIsLoadingAssets(false);
+          if (!isMounted) {
+            return;
           }
+
+          setAssets(items);
+          if (props.onAssetsLoaded) {
+            props.onAssetsLoaded(items);
+          }
+
+          return loadCartItems(items)
+            .then(() => {
+              if (isMounted) {
+                setIsLoadingAssets(false);
+              }
+            })
+            .catch((cartError: Error) => {
+              // eslint-disable-next-line no-console
+              console.error('Khong the tai gio hang tu SharePoint', cartError);
+
+              if (isMounted) {
+                setIsLoadingAssets(false);
+              }
+            });
         })
         .catch((error: Error) => {
           if (!isMounted) {
@@ -139,7 +196,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
     return () => {
       isMounted = false;
     };
-  }, [props.siteUrl, props.spHttpClient]);
+  }, [loadCartItems, props.onAssetsLoaded, props.siteUrl, props.spHttpClient]);
 
   const visibleAssets: IAssetItem[] = React.useMemo(() => {
     const keyword: string = normalizeKeyword(searchValue);
@@ -178,6 +235,9 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
     (asset: IAssetItem, rawValue: string) => {
       let nextValue: string = rawValue.replace(/[^\d]/g, '');
       let errorMessage: string = '';
+      const currentCartItem: ICartItem | undefined = cartItems.filter((item: ICartItem) => item.productCode === asset.assetCode)[0];
+      const quantityOutsideCurrentItem: number = cartQuantity - (currentCartItem ? currentCartItem.quantity : 0);
+      const maxAllowedForAsset: number = Math.max(remainingLimit - quantityOutsideCurrentItem, 0);
 
       if (nextValue === '') {
         setQuantityInputs((prevState) => ({
@@ -199,12 +259,14 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
 
       if (parsedValue > asset.availableQuantity) {
         nextValue = String(asset.availableQuantity);
-        errorMessage = 'So luong toi da la ' + String(asset.availableQuantity) + '.';
       }
 
-      if (Number(nextValue) > remainingLimit) {
-        nextValue = String(remainingLimit);
-        errorMessage = 'Ban chi con duoc mua ' + String(remainingLimit) + ' tai san.';
+      if (Number(nextValue) > maxAllowedForAsset) {
+        nextValue = String(maxAllowedForAsset);
+      }
+
+      if (Number(nextValue) <= 0) {
+        errorMessage = 'Ban da dat gioi han mua toi da.';
       }
 
       setQuantityInputs((prevState) => ({
@@ -216,7 +278,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
         [asset.id]: errorMessage
       }));
     },
-    [remainingLimit]
+    [cartItems, cartQuantity, remainingLimit]
   );
 
   const handleQuantityChange = React.useCallback(
@@ -240,60 +302,38 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
   }, []);
 
   const setAssetSubmittingState = React.useCallback((assetId: string, isSubmitting: boolean) => {
-    submittingAssetIdsRef.current = {
-      ...submittingAssetIdsRef.current,
-      [assetId]: isSubmitting
-    };
-
     setSubmittingAssetIds((prevState) => ({
       ...prevState,
       [assetId]: isSubmitting
     }));
   }, []);
 
-  const handleRegister = React.useCallback(
+  const handleAddToCart = React.useCallback(
     (asset: IAssetItem) => {
       const quantity: number = Number(quantityInputs[asset.id] || '0');
       const hasError: boolean = !!quantityErrors[asset.id];
 
-      if (!quantity || quantity <= 0 || quantity > asset.availableQuantity || quantity > remainingLimit || hasError) {
+      if (!quantity || quantity <= 0 || quantity > asset.availableQuantity || hasError) {
         setQuantityErrors((prevState) => ({
           ...prevState,
-          [asset.id]:
-            quantity > remainingLimit
-              ? 'Ban chi con duoc mua ' + String(remainingLimit) + ' tai san.'
-              : 'Vui long nhap so luong hop le.'
+          [asset.id]: 'Vui long nhap so luong hop le.'
         }));
         return;
       }
 
-      if (submittingAssetIdsRef.current[asset.id]) {
-        return;
-      }
-
-      const payload: IPurchasePayload = {
-        asset,
-        quantity
-      };
-
       setAssetSubmittingState(asset.id, true);
 
-      // eslint-disable-next-line no-console
-      console.log('Dang ky mua tai san', payload);
-
-      generateUniqueOrderId(props.siteUrl, props.spHttpClient)
-        .then((generatedOrderId: string) => {
-          const nextOrder: IOrderDetail = createOrderDetailFromPurchase(asset, quantity, displayName, generatedOrderId);
-
-          return createTransactionItem({
-            siteUrl: props.siteUrl,
-            spHttpClient: props.spHttpClient,
-            buyerName: displayName,
-            buyerEmail: props.userEmail,
-            orderDetail: nextOrder
-          }).then(() => nextOrder);
-        })
-        .then((createdOrder: IOrderDetail) => {
+      upsertCartItem({
+        siteUrl: props.siteUrl,
+        spHttpClient: props.spHttpClient,
+        buyerName: displayName,
+        buyerEmail: props.userEmail,
+        productCode: asset.assetCode,
+        quantity,
+        unitPrice: asset.price
+      })
+        .then(() => loadCartItems(assets))
+        .then(() => {
           setQuantityInputs((prevState) => ({
             ...prevState,
             [asset.id]: ''
@@ -302,29 +342,22 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
             ...prevState,
             [asset.id]: ''
           }));
-
-          if (typeof window !== 'undefined' && window.alert) {
-            window.alert('Dang ky mua thanh cong. Ma don hang: ' + createdOrder.orderCode);
-          }
-
-          if (props.onPurchaseSuccess) {
-            props.onPurchaseSuccess(createdOrder);
-          }
-
-          setAssetSubmittingState(asset.id, false);
         })
         .catch((error: Error) => {
           // eslint-disable-next-line no-console
-          console.error('Khong the tao don mua tren SharePoint', error);
-          if (typeof window !== 'undefined' && window.alert) {
-            window.alert('Khong the tao don mua tren SharePoint. Vui long thu lai hoac lien he IT Support.');
+          console.error('Khong the them vao gio hang', error);
+          window.alert('Khong the them san pham vao gio hang tren SharePoint.');
+        })
+        .then(
+          () => {
+            setAssetSubmittingState(asset.id, false);
+          },
+          () => {
+            setAssetSubmittingState(asset.id, false);
           }
-
-          setAssetSubmittingState(asset.id, false);
-        });
-
+        );
     },
-    [displayName, props, quantityErrors, quantityInputs, remainingLimit, setAssetSubmittingState]
+    [assets, displayName, loadCartItems, props.siteUrl, props.spHttpClient, props.userEmail, quantityErrors, quantityInputs, setAssetSubmittingState]
   );
 
   return (
@@ -346,7 +379,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
       <div className={styles.subHeader}>
         <div>
           <strong className={styles.subHeaderTitle}>Danh sach tai san thanh ly</strong>
-          <span className={styles.subHeaderText}>CBNV co the tim kiem, loc va dang ky mua tai san tren cung mot man hinh.</span>
+          <span className={styles.subHeaderText}>CBNV co the tim kiem, them vao gio hang va tao don mua nhieu san pham.</span>
           <span className={styles.subHeaderText}>
             Nguon du lieu: {props.siteUrl} / {SHAREPOINT_LIST_TITLE}
           </span>
@@ -378,15 +411,14 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
             remainingLimit={remainingLimit}
             submittingAssetIds={submittingAssetIds}
             onQuantityChange={handleQuantityChange}
-            onRegister={handleRegister}
+            onAddToCart={handleAddToCart}
           />
         )}
 
         {!isLoadingAssets && !!visibleAssets.length && (
           <div className={styles.paginationBar}>
             <div className={styles.paginationSummary}>
-              Hien thi {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, visibleAssets.length)} /{' '}
-              {visibleAssets.length} tai san
+              Hien thi {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, visibleAssets.length)} / {visibleAssets.length} tai san
             </div>
 
             <div className={styles.paginationControls}>
