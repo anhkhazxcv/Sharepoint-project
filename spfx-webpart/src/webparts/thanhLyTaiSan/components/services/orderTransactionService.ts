@@ -377,6 +377,66 @@ export async function getTransactionsByUser(
   });
 }
 
+export async function getAllTransactions(siteUrl: string, spHttpClient: SPHttpClient): Promise<IUserTransactionRecord[]> {
+  const orderHeaders: TSharePointItem[] = await getListItems(
+    siteUrl,
+    spHttpClient,
+    ORDER_LIST_TITLE,
+    ['OrderId', 'EmployeeName', 'EmployeeEmail', 'OrderDate', 'TotalQuantity', 'TotalAmount', 'Status', 'PaymentStatus', 'Id']
+  );
+
+  if (!orderHeaders.length) {
+    return [];
+  }
+
+  const orderIds: string[] = orderHeaders
+    .map((item: TSharePointItem) => getStringValue(item, ['OrderId']))
+    .filter((value: string) => !!value);
+
+  const orderDetailItems: TSharePointItem[] = orderIds.length
+    ? await getListItems(
+        siteUrl,
+        spHttpClient,
+        ORDER_DETAIL_LIST_TITLE,
+        ['OrderId', 'ProductCode', 'Quantity', 'UnitPrice', 'LineTotal'],
+        buildOrFilter('OrderId', orderIds)
+      )
+    : [];
+
+  const detailMap: Record<string, IUserTransactionLineRecord[]> = {};
+  orderDetailItems.forEach((item: TSharePointItem) => {
+    const orderId: string = getStringValue(item, ['OrderId']);
+
+    if (!detailMap[orderId]) {
+      detailMap[orderId] = [];
+    }
+
+    detailMap[orderId].push({
+      productCode: getStringValue(item, ['ProductCode']),
+      quantity: getNumberValue(item, ['Quantity'], 0),
+      unitPrice: getNumberValue(item, ['UnitPrice'], 0),
+      lineTotal: getNumberValue(item, ['LineTotal'], 0)
+    });
+  });
+
+  return orderHeaders.map((item: TSharePointItem): IUserTransactionRecord => {
+    const orderId: string = getStringValue(item, ['OrderId'], 'N/A');
+
+    return {
+      orderId,
+      orderCode: orderId,
+      buyerName: getStringValue(item, ['EmployeeName'], 'Chua cap nhat'),
+      buyerEmail: getStringValue(item, ['EmployeeEmail'], ''),
+      purchaseDate: getStringValue(item, ['OrderDate', 'Created'], new Date().toISOString()),
+      totalAmount: getNumberValue(item, ['TotalAmount'], 0),
+      totalQuantity: getNumberValue(item, ['TotalQuantity'], 0),
+      status: getStringValue(item, ['Status'], 'Chua ban giao'),
+      paymentStatus: getStringValue(item, ['PaymentStatus'], 'Cho xac nhan'),
+      items: detailMap[orderId] || []
+    };
+  });
+}
+
 export async function createPaymentHistoryItem(options: ICreatePaymentHistoryOptions): Promise<void> {
   try {
     await postListItem(options.siteUrl, options.spHttpClient, PAYMENT_HISTORY_LIST_TITLE, {

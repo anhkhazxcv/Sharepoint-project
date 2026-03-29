@@ -105,6 +105,9 @@
 }
 
 .contentArea {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
   padding: 20px 24px 28px;
 }
 
@@ -121,7 +124,6 @@
 }
 
 .paginationBar {
-  margin-top: 20px;
   padding: 14px 16px;
   border: 1px solid #d6dee8;
   border-radius: 12px;
@@ -130,6 +132,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  position: relative;
+  z-index: 1;
 }
 
 .paginationSummary {

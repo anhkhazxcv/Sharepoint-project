@@ -5,7 +5,6 @@ import styles from './ActionToolbar.module.scss';
 export interface IActionToolbarProps {
   currentStep: TProcessStep;
   onConfirmPayment: () => void;
-  onPay: () => void;
   onConfirmHandover: () => void;
 }
 
@@ -23,9 +22,6 @@ export function ActionToolbar(props: IActionToolbarProps): React.ReactElement {
       >
         Xác nhận thanh toán
       </button>
-      <button type="button" className={styles.primaryButton} disabled={!isPaymentStep} onClick={props.onPay}>
-        Thanh toán
-      </button>
       <button
         type="button"
         className={styles.successButton}
@@ -33,9 +29,6 @@ export function ActionToolbar(props: IActionToolbarProps): React.ReactElement {
         onClick={props.onConfirmHandover}
       >
         Xác nhận bàn giao
-      </button>
-      <button type="button" className={styles.moreButton} aria-label="Thêm thao tác">
-        ...
       </button>
     </div>
   );

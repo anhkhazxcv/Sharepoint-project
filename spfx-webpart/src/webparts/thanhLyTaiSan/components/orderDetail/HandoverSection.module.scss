@@ -25,14 +25,12 @@
 }
 
 .actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  display: flex;
 }
 
-.printButton,
 .confirmButton {
   min-height: 44px;
+  width: 100%;
   border: 0;
   border-radius: 8px;
   font-size: 14px;
@@ -46,11 +44,6 @@
   }
 }
 
-.printButton {
-  background: #0f4c81;
-  color: #ffffff;
-}
-
 .confirmButton {
   background: #1f8f4d;
   color: #ffffff;
@@ -59,9 +52,5 @@
 @media (max-width: 640px) {
   .card {
     padding: 16px;
-  }
-
-  .actions {
-    grid-template-columns: 1fr;
   }
 }

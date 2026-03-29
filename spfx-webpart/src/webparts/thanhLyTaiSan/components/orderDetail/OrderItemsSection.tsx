@@ -8,7 +8,6 @@ export interface IOrderItemsSectionProps {
   items: IOrderItem[];
   currentStep: TProcessStep;
   onConfirmPayment: () => void;
-  onPay: () => void;
   onConfirmHandover: () => void;
 }
 
@@ -22,7 +21,6 @@ export function OrderItemsSection(props: IOrderItemsSectionProps): React.ReactEl
       <ActionToolbar
         currentStep={props.currentStep}
         onConfirmPayment={props.onConfirmPayment}
-        onPay={props.onPay}
         onConfirmHandover={props.onConfirmHandover}
       />
 

@@ -2,7 +2,6 @@ import * as React from 'react';
 import { ProcessStepper } from './ProcessStepper';
 import { OrderSummaryCard } from './OrderSummaryCard';
 import { OrderItemsSection } from './OrderItemsSection';
-import { HandoverSection } from './HandoverSection';
 import { BankAccountCard } from './BankAccountCard';
 import { PaymentQrCard } from './PaymentQrCard';
 import type { IOrderDetail } from './types';
@@ -40,8 +39,6 @@ export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElemen
   }
 
   const orderDetail: IOrderDetail = props.orderDetail;
-  const canRunHandoverActions: boolean =
-    orderDetail.currentStep === 'Bàn giao' || orderDetail.currentStep === 'Hoàn tất';
 
   function showMockAction(message: string): void {
     // eslint-disable-next-line no-console
@@ -92,23 +89,6 @@ export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElemen
                 props.onConfirmPayment(orderDetail.orderId);
               }
               showMockAction('Da xac nhan thanh toan va chuyen sang ban giao');
-            }}
-            onPay={function (): void {
-              showMockAction('Da hien thi STK phap nhan va QR thanh toan');
-            }}
-            onConfirmHandover={function (): void {
-              if (props.onConfirmHandover) {
-                props.onConfirmHandover(orderDetail.orderId);
-              }
-              showMockAction('Da xac nhan ban giao tai san');
-            }}
-          />
-
-          <HandoverSection
-            canPrint={canRunHandoverActions}
-            canConfirm={orderDetail.currentStep === 'Bàn giao'}
-            onPrintPdf={function (): void {
-              showMockAction('Da tao bien ban ban giao PDF');
             }}
             onConfirmHandover={function (): void {
               if (props.onConfirmHandover) {

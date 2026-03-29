@@ -6,10 +6,8 @@
   margin-bottom: 16px;
 }
 
-.primaryButton,
 .secondaryButton,
-.successButton,
-.moreButton {
+.successButton {
   height: 34px;
   padding: 0 14px;
   border-radius: 6px;
@@ -27,11 +25,6 @@
   }
 }
 
-.primaryButton {
-  background: #0f4c81;
-  color: #ffffff;
-}
-
 .secondaryButton {
   background: #f8fafc;
   border-color: #cdd7e3;
@@ -43,20 +36,11 @@
   color: #ffffff;
 }
 
-.moreButton {
-  width: 34px;
-  padding: 0;
-  background: #f8fafc;
-  border-color: #cdd7e3;
-  color: #4b5563;
-}
-
 @media (max-width: 768px) {
   .toolbar {
     gap: 8px;
   }
 
-  .primaryButton,
   .secondaryButton,
   .successButton {
     flex: 1 1 calc(50% - 4px);
@@ -64,15 +48,9 @@
 }
 
 @media (max-width: 640px) {
-  .primaryButton,
   .secondaryButton,
-  .successButton,
-  .moreButton {
+  .successButton {
     width: 100%;
     flex: 1 1 100%;
-  }
-
-  .moreButton {
-    height: 34px;
   }
 }

@@ -36,7 +36,7 @@ export function buildVietQrImageUrl(bankSlug: string, accountNumber: string): st
 export async function getBankInfoFromSharePoint(
   siteUrl: string,
   spHttpClient: SPHttpClient
-): Promise<IBankInfoRecord | null> {
+): Promise<IBankInfoRecord | undefined> {
   const requestUrl: string =
     siteUrl.replace(/\/$/, '') +
     "/_api/web/lists/getbytitle('" +
@@ -61,7 +61,7 @@ export async function getBankInfoFromSharePoint(
   const items: TSharePointItem[] = Array.isArray(json.value) ? json.value : [];
 
   if (!items.length) {
-    return null;
+    return undefined;
   }
 
   return {

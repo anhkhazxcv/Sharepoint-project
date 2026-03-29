@@ -31,6 +31,7 @@ export interface IOrderDetail {
   orderId: string;
   orderCode: string;
   buyerName: string;
+  buyerEmail?: string;
   purchaseDate: string;
   totalAmount: number;
   currentStep: TProcessStep;

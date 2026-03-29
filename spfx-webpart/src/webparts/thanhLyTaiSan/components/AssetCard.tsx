@@ -52,7 +52,7 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
 
   return (
     <article className={`${styles.card} ${isSoldOut ? styles.soldOutCard : ''}`}>
-      <div className={styles.header}>
+      <div className={styles.topSection}>
         <div className={styles.imageWrap}>
           {!hasImage || isImageBroken ? (
             <div className={styles.imageFallback}>Khong co anh</div>
@@ -66,7 +66,7 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
           )}
         </div>
 
-        <div className={styles.info}>
+        <div className={styles.content}>
           <div className={styles.titleRow}>
             <span className={`${styles.statusBadge} ${isSoldOut ? styles.statusSoldOut : styles.statusAvailable}`}>
               {isSoldOut ? 'Het hang' : asset.statusText}
@@ -74,13 +74,15 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
             <span className={styles.category}>{asset.category}</span>
           </div>
 
-          <div className={styles.infoLine}>
-            <span className={styles.label}>Ten TS</span>
-            <strong className={styles.valueTitle}>{asset.assetName}</strong>
-          </div>
-          <div className={styles.infoLine}>
-            <span className={styles.label}>Ma TS</span>
-            <strong className={styles.value}>{asset.assetCode}</strong>
+          <div className={styles.summary}>
+            <div className={styles.infoRow}>
+              <span className={styles.label}>Ten TS</span>
+              <strong className={styles.valueTitle}>{asset.assetName}</strong>
+            </div>
+            <div className={styles.infoRow}>
+              <span className={styles.label}>Ma TS</span>
+              <strong className={styles.value}>{asset.assetCode}</strong>
+            </div>
           </div>
 
           <div className={styles.barcodeBlock}>
@@ -89,19 +91,19 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
           </div>
 
           <div className={styles.metaGrid}>
-            <div className={styles.infoLine}>
+            <div className={styles.metaItem}>
               <span className={styles.label}>So luong tong</span>
               <strong className={styles.value}>{asset.totalQuantity}</strong>
             </div>
-            <div className={styles.infoLine}>
+            <div className={styles.metaItem}>
               <span className={styles.label}>Tinh trang TS</span>
               <strong className={styles.value}>{asset.condition}</strong>
             </div>
-            <div className={styles.infoLine}>
+            <div className={styles.metaItem}>
               <span className={styles.label}>Site</span>
               <strong className={styles.value}>{asset.site}</strong>
             </div>
-            <div className={styles.infoLine}>
+            <div className={styles.metaItem}>
               <span className={styles.label}>So luong ton</span>
               <strong className={styles.value}>{asset.availableQuantity}</strong>
             </div>
@@ -115,29 +117,31 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
           <strong className={styles.price}>{formatCurrency(asset.price)}</strong>
         </div>
 
-        <label className={styles.quantityField} htmlFor={`quantity-${asset.id}`}>
-          <span className={styles.label}>So luong mua</span>
-          <input
-            id={`quantity-${asset.id}`}
-            className={`${styles.quantityInput} ${errorMessage ? styles.quantityError : ''}`}
-            type="number"
-            min={0}
-            step={1}
-            inputMode="numeric"
-            value={isSoldOut ? '0' : quantityValue}
-            disabled={isSoldOut || remainingLimit === 0 || !!isSubmitting}
-            onChange={(event: React.ChangeEvent<HTMLInputElement>) => onQuantityChange(asset.id, event.target.value)}
-          />
-        </label>
+        <div className={styles.purchaseRow}>
+          <label className={styles.quantityField} htmlFor={`quantity-${asset.id}`}>
+            <span className={styles.label}>So luong mua</span>
+            <input
+              id={`quantity-${asset.id}`}
+              className={`${styles.quantityInput} ${errorMessage ? styles.quantityError : ''}`}
+              type="number"
+              min={0}
+              step={1}
+              inputMode="numeric"
+              value={isSoldOut ? '0' : quantityValue}
+              disabled={isSoldOut || remainingLimit === 0 || !!isSubmitting}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => onQuantityChange(asset.id, event.target.value)}
+            />
+          </label>
 
-        <button
-          type="button"
-          className={`${styles.actionButton} ${isSoldOut ? styles.actionDisabled : styles.actionActive}`}
-          disabled={isActionDisabled}
-          onClick={() => onAddToCart(asset)}
-        >
-          {isSoldOut ? 'Het hang' : isSubmitting ? 'Dang them...' : 'Them vao gio'}
-        </button>
+          <button
+            type="button"
+            className={`${styles.actionButton} ${isSoldOut ? styles.actionDisabled : styles.actionActive}`}
+            disabled={isActionDisabled}
+            onClick={() => onAddToCart(asset)}
+          >
+            {isSoldOut ? 'Het hang' : isSubmitting ? 'Dang them...' : 'Them vao gio'}
+          </button>
+        </div>
 
         {remainingLimit === 0 && !isSoldOut ? (
           <span className={styles.helperText}>Da dat gioi han mua toi da.</span>

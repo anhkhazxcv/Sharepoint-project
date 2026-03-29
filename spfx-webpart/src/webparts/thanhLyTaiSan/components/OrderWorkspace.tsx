@@ -2,6 +2,7 @@ import * as React from 'react';
 import type { SPHttpClient } from '@microsoft/sp-http';
 import { AssetLiquidationPage } from './AssetLiquidationPage';
 import { CartPage } from './CartPage';
+import { AdminTransactionPage } from './orderDetail/AdminTransactionPage';
 import { OrderDetailPage } from './orderDetail/OrderDetailPage';
 import { OrderListPage } from './orderDetail/OrderListPage';
 import techcombankLogo from '../assets/techcombank-1.png';
@@ -9,6 +10,7 @@ import type { IOrderDetail, IOrderItem } from './orderDetail/types';
 import type { IAssetItem } from './types';
 import {
   createPaymentHistoryItem,
+  getAllTransactions,
   getTransactionsByUser,
   type IUserTransactionLineRecord,
   type IUserTransactionRecord,
@@ -26,7 +28,7 @@ export interface IOrderWorkspaceProps {
   siteUrl: string;
 }
 
-type TWorkspaceTab = 'register' | 'cart' | 'orders';
+type TWorkspaceTab = 'register' | 'cart' | 'orders' | 'admin';
 
 function createAssetPlaceholder(label: string): string {
   const svg: string =
@@ -122,7 +124,7 @@ function mapLineRecordToOrderItem(
 function mapTransactionRecordToOrderDetail(
   record: IUserTransactionRecord,
   assets: IAssetItem[],
-  bankInfo: IBankInfoRecord | null
+  bankInfo: IBankInfoRecord | undefined
 ): IOrderDetail {
   const orderState = getOrderStateFromStatuses(record.paymentStatus, record.status);
   const compactBuyerName: string = sanitizeBuyerName(record.buyerName);
@@ -141,6 +143,7 @@ function mapTransactionRecordToOrderDetail(
     orderId: record.orderId,
     orderCode: record.orderCode,
     buyerName: record.buyerName,
+    buyerEmail: record.buyerEmail,
     purchaseDate: record.purchaseDate,
     totalAmount: record.totalAmount,
     currentStep: orderState.currentStep,
@@ -184,9 +187,10 @@ function mapOrderDetailToTransactionRecord(orderDetail: IOrderDetail, userEmail:
 export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement {
   const [activeTab, setActiveTab] = React.useState<TWorkspaceTab>('register');
   const [transactionRecords, setTransactionRecords] = React.useState<IUserTransactionRecord[]>([]);
+  const [adminTransactionRecords, setAdminTransactionRecords] = React.useState<IUserTransactionRecord[]>([]);
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(null);
   const [assets, setAssets] = React.useState<IAssetItem[]>([]);
-  const [bankInfo, setBankInfo] = React.useState<IBankInfoRecord | null>(null);
+  const [bankInfo, setBankInfo] = React.useState<IBankInfoRecord | undefined>(undefined);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState<boolean>(false);
 
   React.useEffect(() => {
@@ -201,8 +205,19 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
   }, [props.siteUrl, props.spHttpClient, props.userEmail]);
 
   React.useEffect(() => {
+    getAllTransactions(props.siteUrl, props.spHttpClient)
+      .then((records: IUserTransactionRecord[]): void => {
+        setAdminTransactionRecords(records);
+      })
+      .catch((error: Error): void => {
+        // eslint-disable-next-line no-console
+        console.error('Khong the tai danh sach giao dich admin', error);
+      });
+  }, [props.siteUrl, props.spHttpClient]);
+
+  React.useEffect(() => {
     getBankInfoFromSharePoint(props.siteUrl, props.spHttpClient)
-      .then((record: IBankInfoRecord | null): void => {
+      .then((record: IBankInfoRecord | undefined): void => {
         setBankInfo(record);
       })
       .catch((error: Error): void => {
@@ -217,6 +232,12 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
     });
   }, [assets, bankInfo, transactionRecords]);
 
+  const adminOrders: IOrderDetail[] = React.useMemo((): IOrderDetail[] => {
+    return adminTransactionRecords.map((record: IUserTransactionRecord): IOrderDetail => {
+      return mapTransactionRecordToOrderDetail(record, assets, bankInfo);
+    });
+  }, [adminTransactionRecords, assets, bankInfo]);
+
   const purchasedCount: number = React.useMemo((): number => {
     return transactionRecords.reduce((total: number, record: IUserTransactionRecord): number => {
       return total + record.totalQuantity;
@@ -228,15 +249,21 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
   }, []);
 
   function handlePurchaseSuccess(orderDetail: IOrderDetail): void {
+    const nextRecord: IUserTransactionRecord = mapOrderDetailToTransactionRecord(orderDetail, props.userEmail);
+
     setTransactionRecords((prevRecords: IUserTransactionRecord[]): IUserTransactionRecord[] => {
-      return [mapOrderDetailToTransactionRecord(orderDetail, props.userEmail)].concat(prevRecords);
+      return [nextRecord].concat(prevRecords);
+    });
+    setAdminTransactionRecords((prevRecords: IUserTransactionRecord[]): IUserTransactionRecord[] => {
+      return [nextRecord].concat(prevRecords);
     });
     setSelectedOrderId(orderDetail.orderId);
     setActiveTab('orders');
   }
 
   function getOrderById(orderId: string): IOrderDetail | null {
-    const matchedOrder: IOrderDetail[] = orders.filter((order: IOrderDetail) => order.orderId === orderId);
+    const sourceOrders: IOrderDetail[] = activeTab === 'admin' ? adminOrders : orders;
+    const matchedOrder: IOrderDetail[] = sourceOrders.filter((order: IOrderDetail) => order.orderId === orderId);
     return matchedOrder.length ? matchedOrder[0] : null;
   }
 
@@ -253,10 +280,34 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
         };
       });
     });
+    setAdminTransactionRecords((prevRecords: IUserTransactionRecord[]): IUserTransactionRecord[] => {
+      return prevRecords.map((record: IUserTransactionRecord): IUserTransactionRecord => {
+        if (record.orderId !== orderId) {
+          return record;
+        }
+
+        return {
+          ...record,
+          status
+        };
+      });
+    });
   }
 
   function updatePaymentStatusInState(orderId: string, paymentStatus: string): void {
     setTransactionRecords((prevRecords: IUserTransactionRecord[]): IUserTransactionRecord[] => {
+      return prevRecords.map((record: IUserTransactionRecord): IUserTransactionRecord => {
+        if (record.orderId !== orderId) {
+          return record;
+        }
+
+        return {
+          ...record,
+          paymentStatus
+        };
+      });
+    });
+    setAdminTransactionRecords((prevRecords: IUserTransactionRecord[]): IUserTransactionRecord[] => {
       return prevRecords.map((record: IUserTransactionRecord): IUserTransactionRecord => {
         if (record.orderId !== orderId) {
           return record;
@@ -384,12 +435,16 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
 
   function openOrderDetail(order: IOrderDetail): void {
     setSelectedOrderId(order.orderId);
-    setActiveTab('orders');
   }
 
   function showOrderList(): void {
     setSelectedOrderId(null);
     setActiveTab('orders');
+  }
+
+  function showAdminList(): void {
+    setSelectedOrderId(null);
+    setActiveTab('admin');
   }
 
   const selectedOrder: IOrderDetail | null = selectedOrderId ? getOrderById(selectedOrderId) : null;
@@ -495,6 +550,30 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
                 </span>
               )}
             </button>
+
+            <button
+              type="button"
+              className={
+                styles.menuButton +
+                ' ' +
+                (activeTab === 'admin' ? styles.menuButtonActive : '') +
+                ' ' +
+                (isSidebarCollapsed ? styles.menuButtonCollapsed : '')
+              }
+              onClick={showAdminList}
+              aria-label={'Quan ly giao dich admin ' + String(adminOrders.length)}
+              title={'Quan ly giao dich admin (' + String(adminOrders.length) + ')'}
+            >
+              <span className={styles.menuIcon} aria-hidden="true">
+                A
+              </span>
+              {!isSidebarCollapsed && (
+                <span className={styles.menuText}>
+                  <span className={styles.menuLabel}>Quan ly giao dich</span>
+                  <span className={styles.menuHint}>Theo doi tat ca don hang ({adminOrders.length})</span>
+                </span>
+              )}
+            </button>
           </nav>
         </aside>
 
@@ -527,6 +606,8 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
                 setSelectedOrderId(null);
               }}
             />
+          ) : activeTab === 'admin' ? (
+            <AdminTransactionPage orders={adminOrders} onOpenOrder={openOrderDetail} />
           ) : (
             <OrderListPage orders={orders} onOpenOrder={openOrderDetail} />
           )}
