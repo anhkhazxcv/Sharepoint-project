@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
   "solution": {
-    "name": "spfx-webpart-client-side-solution",
+    "name": "MAG-thanh-ly-tai-san-client-side-solution",
     "id": "747f52a5-f25c-433f-9dcf-521a522375ca",
     "version": "1.0.0.0",
     "includeClientSideAssets": true,
@@ -35,6 +35,6 @@
     ]
   },
   "paths": {
-    "zippedPackage": "solution/spfx-webpart.sppkg"
+    "zippedPackage": "solution/MAG-thanh-ly-tai-san.sppkg"
   }
 }
