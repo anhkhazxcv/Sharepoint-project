@@ -1,5 +1,6 @@
 import * as React from 'react';
 import type { SPHttpClient } from '@microsoft/sp-http';
+import { AssetCatalogBrowsePage } from './assetCatalogBrowse/AssetCatalogBrowsePage';
 import { AssetLiquidationPage } from './AssetLiquidationPage';
 import { CartPage } from './CartPage';
 import { AdminTransactionPage } from './orderDetail/AdminTransactionPage';
@@ -28,7 +29,7 @@ export interface IOrderWorkspaceProps {
   siteUrl: string;
 }
 
-type TWorkspaceTab = 'register' | 'cart' | 'orders' | 'admin';
+type TWorkspaceTab = 'catalog' | 'register' | 'cart' | 'orders' | 'admin';
 
 function createAssetPlaceholder(label: string): string {
   const svg: string =
@@ -185,7 +186,7 @@ function mapOrderDetailToTransactionRecord(orderDetail: IOrderDetail, userEmail:
 }
 
 export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement {
-  const [activeTab, setActiveTab] = React.useState<TWorkspaceTab>('register');
+  const [activeTab, setActiveTab] = React.useState<TWorkspaceTab>('catalog');
   const [transactionRecords, setTransactionRecords] = React.useState<IUserTransactionRecord[]>([]);
   const [adminTransactionRecords, setAdminTransactionRecords] = React.useState<IUserTransactionRecord[]>([]);
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(null);
@@ -480,6 +481,32 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
               className={
                 styles.menuButton +
                 ' ' +
+                (activeTab === 'catalog' ? styles.menuButtonActive : '') +
+                ' ' +
+                (isSidebarCollapsed ? styles.menuButtonCollapsed : '')
+              }
+              onClick={(): void => {
+                setActiveTab('catalog');
+              }}
+              aria-label="Xem danh sach tai san"
+              title="Xem danh sach tai san"
+            >
+              <span className={styles.menuIcon} aria-hidden="true">
+                L
+              </span>
+              {!isSidebarCollapsed && (
+                <span className={styles.menuText}>
+                  <span className={styles.menuLabel}>Danh sach tai san</span>
+                  <span className={styles.menuHint}>Xem tai san co the mua</span>
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className={
+                styles.menuButton +
+                ' ' +
                 (activeTab === 'register' ? styles.menuButtonActive : '') +
                 ' ' +
                 (isSidebarCollapsed ? styles.menuButtonCollapsed : '')
@@ -578,7 +605,9 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
         </aside>
 
         <div className={styles.content}>
-          {activeTab === 'register' ? (
+          {activeTab === 'catalog' ? (
+            <AssetCatalogBrowsePage siteUrl={props.siteUrl} spHttpClient={props.spHttpClient} />
+          ) : activeTab === 'register' ? (
             <AssetLiquidationPage
               userDisplayName={props.userDisplayName}
               userEmail={props.userEmail}
