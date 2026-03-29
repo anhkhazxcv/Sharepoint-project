@@ -12,6 +12,22 @@ function normalizeValue(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function getPaymentBadgeClass(status: string): string {
+  if (status === 'Đã thanh toán') {
+    return styles.badgeSuccess;
+  }
+
+  return styles.badgeWarning;
+}
+
+function getHandoverBadgeClass(status: string): string {
+  if (status === 'Đã bàn giao') {
+    return styles.badgeSuccess;
+  }
+
+  return styles.badgeNeutral;
+}
+
 export function AdminTransactionPage(props: IAdminTransactionPageProps): React.ReactElement {
   const [searchValue, setSearchValue] = React.useState<string>('');
   const [paymentFilter, setPaymentFilter] = React.useState<string>('');
@@ -60,7 +76,7 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
         <div className={styles.summaryChip}>Tổng giao dịch: {filteredOrders.length}</div>
       </div>
 
-      <div className={styles.filterBar}>
+      <div className={styles.filterPanel}>
         <label className={styles.filterField}>
           <span className={styles.filterLabel}>Tìm theo mã đơn</span>
           <input
@@ -128,11 +144,15 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
                   <tr key={order.orderId}>
                     <td className={styles.codeCell}>{order.orderCode}</td>
                     <td>{order.buyerName}</td>
-                    <td>{order.buyerEmail || '-'}</td>
+                    <td className={styles.emailCell}>{order.buyerEmail || '-'}</td>
                     <td>{formatDate(order.purchaseDate)}</td>
                     <td>{formatCurrency(order.totalAmount)}</td>
-                    <td>{order.paymentStatus}</td>
-                    <td>{order.handoverStatus}</td>
+                    <td>
+                      <span className={`${styles.statusBadge} ${getPaymentBadgeClass(order.paymentStatus)}`}>{order.paymentStatus}</span>
+                    </td>
+                    <td>
+                      <span className={`${styles.statusBadge} ${getHandoverBadgeClass(order.handoverStatus)}`}>{order.handoverStatus}</span>
+                    </td>
                     <td>
                       <button type="button" className={styles.linkButton} onClick={(): void => props.onOpenOrder(order)}>
                         Xem chi tiết
@@ -159,6 +179,10 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
                   <strong>{order.buyerName}</strong>
                 </div>
                 <div className={styles.mobileRow}>
+                  <span className={styles.mobileLabel}>Email</span>
+                  <strong className={styles.emailCell}>{order.buyerEmail || '-'}</strong>
+                </div>
+                <div className={styles.mobileRow}>
                   <span className={styles.mobileLabel}>Ngày mua</span>
                   <strong>{formatDate(order.purchaseDate)}</strong>
                 </div>
@@ -168,11 +192,11 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
                 </div>
                 <div className={styles.mobileRow}>
                   <span className={styles.mobileLabel}>Thanh toán</span>
-                  <strong>{order.paymentStatus}</strong>
+                  <span className={`${styles.statusBadge} ${getPaymentBadgeClass(order.paymentStatus)}`}>{order.paymentStatus}</span>
                 </div>
                 <div className={styles.mobileRow}>
                   <span className={styles.mobileLabel}>Bàn giao</span>
-                  <strong>{order.handoverStatus}</strong>
+                  <span className={`${styles.statusBadge} ${getHandoverBadgeClass(order.handoverStatus)}`}>{order.handoverStatus}</span>
                 </div>
               </article>
             ))}

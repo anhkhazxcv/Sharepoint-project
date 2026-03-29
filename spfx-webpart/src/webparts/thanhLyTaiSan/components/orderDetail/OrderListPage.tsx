@@ -8,6 +8,22 @@ export interface IOrderListPageProps {
   onOpenOrder: (order: IOrderDetail) => void;
 }
 
+function getPaymentBadgeClass(status: string): string {
+  if (status === 'Đã thanh toán') {
+    return styles.badgeSuccess;
+  }
+
+  return styles.badgeWarning;
+}
+
+function getHandoverBadgeClass(status: string): string {
+  if (status === 'Đã bàn giao') {
+    return styles.badgeSuccess;
+  }
+
+  return styles.badgeNeutral;
+}
+
 export function OrderListPage(props: IOrderListPageProps): React.ReactElement {
   if (!props.orders.length) {
     return (
@@ -41,15 +57,19 @@ export function OrderListPage(props: IOrderListPageProps): React.ReactElement {
             </tr>
           </thead>
           <tbody>
-            {props.orders.map(function (order: IOrderDetail): React.ReactElement {
+            {props.orders.map((order: IOrderDetail): React.ReactElement => {
               return (
                 <tr key={order.orderId}>
                   <td className={styles.codeCell}>{order.orderCode}</td>
                   <td>{order.buyerName}</td>
                   <td>{formatDate(order.purchaseDate)}</td>
                   <td>{formatCurrency(order.totalAmount)}</td>
-                  <td>{order.paymentStatus}</td>
-                  <td>{order.handoverStatus}</td>
+                  <td>
+                    <span className={`${styles.statusBadge} ${getPaymentBadgeClass(order.paymentStatus)}`}>{order.paymentStatus}</span>
+                  </td>
+                  <td>
+                    <span className={`${styles.statusBadge} ${getHandoverBadgeClass(order.handoverStatus)}`}>{order.handoverStatus}</span>
+                  </td>
                   <td>
                     <button type="button" className={styles.linkButton} onClick={function (): void { props.onOpenOrder(order); }}>
                       Xem chi tiết
@@ -63,7 +83,7 @@ export function OrderListPage(props: IOrderListPageProps): React.ReactElement {
       </div>
 
       <div className={styles.mobileList}>
-        {props.orders.map(function (order: IOrderDetail): React.ReactElement {
+        {props.orders.map((order: IOrderDetail): React.ReactElement => {
           return (
             <article key={order.orderId} className={styles.mobileCard}>
               <div className={styles.mobileHeader}>
@@ -93,11 +113,11 @@ export function OrderListPage(props: IOrderListPageProps): React.ReactElement {
               </div>
               <div className={styles.mobileRow}>
                 <span className={styles.mobileLabel}>Thanh toán</span>
-                <strong>{order.paymentStatus}</strong>
+                <span className={`${styles.statusBadge} ${getPaymentBadgeClass(order.paymentStatus)}`}>{order.paymentStatus}</span>
               </div>
               <div className={styles.mobileRow}>
                 <span className={styles.mobileLabel}>Bàn giao</span>
-                <strong>{order.handoverStatus}</strong>
+                <span className={`${styles.statusBadge} ${getHandoverBadgeClass(order.handoverStatus)}`}>{order.handoverStatus}</span>
               </div>
             </article>
           );

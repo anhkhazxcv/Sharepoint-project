@@ -1,10 +1,10 @@
 .card {
   margin: 24px;
-  padding: 20px;
-  background: #fffdfa;
-  border: 1px solid #e5d8c3;
-  border-radius: 12px;
-  box-shadow: 0 4px 14px rgba(98, 77, 40, 0.05);
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e7dccd;
+  border-radius: 24px;
+  box-shadow: 0 16px 30px rgba(67, 46, 23, 0.07);
 }
 
 .header {
@@ -12,94 +12,114 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .title {
   margin: 0;
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
   color: #6a4a1d;
 }
 
 .subtitle {
   display: block;
-  margin-top: 6px;
-  font-size: 13px;
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.6;
   color: #736557;
 }
 
 .summaryChip {
-  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
   border-radius: 999px;
-  background: #f2e6d2;
+  background: #f5ead7;
   color: #7b571f;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
   white-space: nowrap;
 }
 
-.filterBar {
+.filterPanel {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 18px;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 22px;
+  padding: 18px;
+  border-radius: 20px;
+  background: #fffaf4;
+  border: 1px solid #eadfce;
 }
 
 .filterField {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
 .filterLabel {
   font-size: 12px;
-  font-weight: 700;
-  color: #665846;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7a6a58;
 }
 
 .input,
 .select {
   width: 100%;
-  height: 40px;
-  padding: 0 12px;
-  border: 1px solid #d8c9ae;
-  border-radius: 8px;
-  background: #fffdfa;
-  color: #3b3326;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid #dccfb9;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #2d251b;
   font-size: 14px;
   outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:focus {
+    border-color: #9b722f;
+    box-shadow: 0 0 0 3px rgba(155, 114, 47, 0.12);
+  }
 }
 
 .tableWrap {
   overflow-x: auto;
   border: 1px solid #e8dcc8;
-  border-radius: 10px;
+  border-radius: 20px;
+  background: #fffdfa;
 }
 
 .table {
   width: 100%;
-  min-width: 920px;
+  min-width: 980px;
   border-collapse: collapse;
 
   th,
   td {
-    padding: 14px 16px;
-    border-bottom: 1px solid #e2e8f0;
+    padding: 16px 18px;
+    border-bottom: 1px solid #efe5d6;
     text-align: left;
-    vertical-align: top;
+    vertical-align: middle;
   }
 
   th {
     background: #f8f4ec;
-    color: #746556;
+    color: #7a6a58;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
   tbody tr:hover {
-    background: #f9f5ee;
+    background: #fcf8f2;
   }
 
   tbody tr:last-child td {
@@ -108,20 +128,52 @@
 }
 
 .codeCell {
-  font-weight: 700;
+  font-weight: 800;
   color: #7b571f;
 }
 
-.linkButton {
+.emailCell {
+  word-break: break-word;
+  color: #5e5244;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
   min-height: 32px;
   padding: 0 12px;
-  border: 1px solid #d8c9ae;
-  border-radius: 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.badgeSuccess {
+  background: #e9f5eb;
+  color: #2e7d32;
+}
+
+.badgeWarning {
+  background: #fff1df;
+  color: #d9822b;
+}
+
+.badgeNeutral {
+  background: #f0ebe4;
+  color: #82694c;
+}
+
+.linkButton {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #dccfb9;
+  border-radius: 12px;
   background: #fffdfa;
   color: #7b571f;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .mobileList {
@@ -129,10 +181,10 @@
 }
 
 .mobileCard {
-  padding: 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #f8f4ec;
+  padding: 16px;
+  border: 1px solid #eadfce;
+  border-radius: 18px;
+  background: #fffaf4;
 }
 
 .mobileHeader {
@@ -148,27 +200,28 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  padding: 8px 0;
-  border-top: 1px solid #e5e7eb;
+  padding: 10px 0;
+  border-top: 1px solid #efe5d6;
 }
 
 .mobileLabel {
   color: #736557;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .emptyState,
 .noResult {
-  min-height: 180px;
+  min-height: 220px;
   border: 1px dashed #d8c9ae;
-  border-radius: 12px;
+  border-radius: 24px;
   background: #faf7f1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  padding: 24px;
   color: #736557;
   text-align: center;
 }
@@ -177,13 +230,19 @@
   margin: 24px;
 }
 
+@media (max-width: 1200px) {
+  .filterPanel {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 960px) {
   .header {
     flex-direction: column;
   }
 
-  .filterBar {
-    grid-template-columns: 1fr;
+  .summaryChip {
+    white-space: normal;
   }
 }
 
@@ -194,7 +253,12 @@
   }
 
   .card {
-    padding: 16px;
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .title {
+    font-size: 24px;
   }
 
   .tableWrap {
@@ -204,9 +268,5 @@
   .mobileList {
     display: grid;
     gap: 12px;
-  }
-
-  .summaryChip {
-    white-space: normal;
   }
 }
