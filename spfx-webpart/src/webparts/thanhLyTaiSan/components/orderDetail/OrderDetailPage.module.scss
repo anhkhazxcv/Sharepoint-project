@@ -1,6 +1,6 @@
 .page {
   padding: 24px;
-  color: #1f2937;
+  color: #3b3326;
 }
 
 .pageHeader {
@@ -12,10 +12,10 @@
   margin-bottom: 10px;
   min-height: 34px;
   padding: 0 14px;
-  border: 1px solid #cfd8e3;
+  border: 1px solid #d8c9ae;
   border-radius: 6px;
-  background: #ffffff;
-  color: #103b66;
+  background: #fffdfa;
+  color: #7b571f;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -25,7 +25,7 @@
   margin: 0;
   font-size: 28px;
   font-weight: 600;
-  color: #103b66;
+  color: #6a4a1d;
 }
 
 .layout {
@@ -48,7 +48,7 @@
 .skeletonMain,
 .skeletonSide {
   border-radius: 12px;
-  background: linear-gradient(90deg, #edf2f7 0%, #f8fafc 50%, #edf2f7 100%);
+  background: linear-gradient(90deg, #f3ede2 0%, #fbfaf7 50%, #f3ede2 100%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite linear;
 }

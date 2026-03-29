@@ -19,7 +19,7 @@ export function OrderListPage(props: IOrderListPageProps): React.ReactElement {
   }
 
   return (
-      <section className={styles.card}>
+    <section className={styles.card}>
       <div className={styles.header}>
         <div>
           <h2 className={styles.title}>Danh sách đơn hàng chờ thanh toán / bàn giao</h2>

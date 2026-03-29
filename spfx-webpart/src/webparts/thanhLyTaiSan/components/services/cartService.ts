@@ -79,7 +79,7 @@ async function postListItem(
 
   if (!response.ok) {
     const errorText: string = await response.text();
-    throw new Error('Khong the ghi du lieu vao SharePoint list ' + listTitle + '. Response: ' + errorText);
+    throw new Error('Không thể ghi dữ liệu vào SharePoint list ' + listTitle + '. Response: ' + errorText);
   }
 }
 
@@ -109,7 +109,7 @@ async function getListItems(
 
   if (!response.ok) {
     const errorText: string = await response.text();
-    throw new Error('Khong the doc du lieu tu SharePoint list ' + listTitle + '. Response: ' + errorText);
+    throw new Error('Không thể đọc dữ liệu từ SharePoint list ' + listTitle + '. Response: ' + errorText);
   }
 
   const json: { value?: TSharePointItem[] } = (await response.json()) as { value?: TSharePointItem[] };
@@ -163,7 +163,7 @@ async function updateListItemById(
 
   if (!response.ok) {
     const errorText: string = await response.text();
-    throw new Error('Khong the cap nhat du lieu trong SharePoint list ' + listTitle + '. Response: ' + errorText);
+    throw new Error('Không thể cập nhật dữ liệu trong SharePoint list ' + listTitle + '. Response: ' + errorText);
   }
 }
 
@@ -194,7 +194,7 @@ async function deleteListItemById(
 
   if (!response.ok) {
     const errorText: string = await response.text();
-    throw new Error('Khong the xoa du lieu trong SharePoint list ' + listTitle + '. Response: ' + errorText);
+    throw new Error('Không thể xóa dữ liệu trong SharePoint list ' + listTitle + '. Response: ' + errorText);
   }
 }
 

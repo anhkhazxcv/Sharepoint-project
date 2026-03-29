@@ -44,8 +44,8 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
   if (!props.orders.length) {
     return (
       <section className={styles.emptyState}>
-        <strong>Chua co giao dich nao</strong>
-        <span>Danh sach giao dich admin se hien thi tai day khi SharePoint co du lieu don hang.</span>
+        <strong>Chưa có giao dịch nào</strong>
+        <span>Danh sách giao dịch admin sẽ hiển thị tại đây khi SharePoint có dữ liệu đơn hàng.</span>
       </section>
     );
   }
@@ -54,32 +54,32 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
     <section className={styles.card}>
       <div className={styles.header}>
         <div>
-          <h2 className={styles.title}>Quan ly giao dich admin</h2>
-          <span className={styles.subtitle}>Theo doi toan bo don hang va loc theo ma don, thanh toan, ban giao.</span>
+          <h2 className={styles.title}>Quản lý giao dịch admin</h2>
+          <span className={styles.subtitle}>Theo dõi toàn bộ đơn hàng và lọc theo mã đơn, thanh toán, bàn giao.</span>
         </div>
-        <div className={styles.summaryChip}>Tong giao dich: {filteredOrders.length}</div>
+        <div className={styles.summaryChip}>Tổng giao dịch: {filteredOrders.length}</div>
       </div>
 
       <div className={styles.filterBar}>
         <label className={styles.filterField}>
-          <span className={styles.filterLabel}>Tim theo ma don</span>
+          <span className={styles.filterLabel}>Tìm theo mã đơn</span>
           <input
             type="text"
             className={styles.input}
-            placeholder="Nhap ma don hang"
+            placeholder="Nhập mã đơn hàng"
             value={searchValue}
             onChange={(event: React.ChangeEvent<HTMLInputElement>) => setSearchValue(event.target.value)}
           />
         </label>
 
         <label className={styles.filterField}>
-          <span className={styles.filterLabel}>Trang thai thanh toan</span>
+          <span className={styles.filterLabel}>Trạng thái thanh toán</span>
           <select
             className={styles.select}
             value={paymentFilter}
             onChange={(event: React.ChangeEvent<HTMLSelectElement>) => setPaymentFilter(event.target.value)}
           >
-            <option value="">Tat ca</option>
+            <option value="">Tất cả</option>
             {paymentStatuses.map((status: string) => (
               <option key={status} value={status}>
                 {status}
@@ -89,13 +89,13 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
         </label>
 
         <label className={styles.filterField}>
-          <span className={styles.filterLabel}>Trang thai ban giao</span>
+          <span className={styles.filterLabel}>Trạng thái bàn giao</span>
           <select
             className={styles.select}
             value={handoverFilter}
             onChange={(event: React.ChangeEvent<HTMLSelectElement>) => setHandoverFilter(event.target.value)}
           >
-            <option value="">Tat ca</option>
+            <option value="">Tất cả</option>
             {handoverStatuses.map((status: string) => (
               <option key={status} value={status}>
                 {status}
@@ -106,21 +106,21 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
       </div>
 
       {!filteredOrders.length ? (
-        <div className={styles.noResult}>Khong tim thay giao dich phu hop voi dieu kien loc.</div>
+        <div className={styles.noResult}>Không tìm thấy giao dịch phù hợp với điều kiện lọc.</div>
       ) : (
         <>
           <div className={styles.tableWrap}>
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Ma don</th>
-                  <th>Nguoi mua</th>
+                  <th>Mã đơn</th>
+                  <th>Người mua</th>
                   <th>Email</th>
-                  <th>Ngay mua</th>
-                  <th>Tong tien</th>
-                  <th>Thanh toan</th>
-                  <th>Ban giao</th>
-                  <th>Thao tac</th>
+                  <th>Ngày mua</th>
+                  <th>Tổng tiền</th>
+                  <th>Thanh toán</th>
+                  <th>Bàn giao</th>
+                  <th>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -135,7 +135,7 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
                     <td>{order.handoverStatus}</td>
                     <td>
                       <button type="button" className={styles.linkButton} onClick={(): void => props.onOpenOrder(order)}>
-                        Xem chi tiet
+                        Xem chi tiết
                       </button>
                     </td>
                   </tr>
@@ -150,28 +150,28 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
                 <div className={styles.mobileHeader}>
                   <strong className={styles.codeCell}>{order.orderCode}</strong>
                   <button type="button" className={styles.linkButton} onClick={(): void => props.onOpenOrder(order)}>
-                    Xem chi tiet
+                    Xem chi tiết
                   </button>
                 </div>
 
                 <div className={styles.mobileRow}>
-                  <span className={styles.mobileLabel}>Nguoi mua</span>
+                  <span className={styles.mobileLabel}>Người mua</span>
                   <strong>{order.buyerName}</strong>
                 </div>
                 <div className={styles.mobileRow}>
-                  <span className={styles.mobileLabel}>Ngay mua</span>
+                  <span className={styles.mobileLabel}>Ngày mua</span>
                   <strong>{formatDate(order.purchaseDate)}</strong>
                 </div>
                 <div className={styles.mobileRow}>
-                  <span className={styles.mobileLabel}>Tong tien</span>
+                  <span className={styles.mobileLabel}>Tổng tiền</span>
                   <strong>{formatCurrency(order.totalAmount)}</strong>
                 </div>
                 <div className={styles.mobileRow}>
-                  <span className={styles.mobileLabel}>Thanh toan</span>
+                  <span className={styles.mobileLabel}>Thanh toán</span>
                   <strong>{order.paymentStatus}</strong>
                 </div>
                 <div className={styles.mobileRow}>
-                  <span className={styles.mobileLabel}>Ban giao</span>
+                  <span className={styles.mobileLabel}>Bàn giao</span>
                   <strong>{order.handoverStatus}</strong>
                 </div>
               </article>

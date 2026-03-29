@@ -5,20 +5,20 @@ import { CartPage } from './CartPage';
 import { AdminTransactionPage } from './orderDetail/AdminTransactionPage';
 import { OrderDetailPage } from './orderDetail/OrderDetailPage';
 import { OrderListPage } from './orderDetail/OrderListPage';
+import logoMag from '../assets/logoMAG.png';
 import techcombankLogo from '../assets/techcombank-1.png';
 import type { IOrderDetail, IOrderItem } from './orderDetail/types';
 import type { IAssetItem } from './types';
 import {
-  createPaymentHistoryItem,
   getAllTransactions,
   getTransactionsByUser,
   type IUserTransactionLineRecord,
   type IUserTransactionRecord,
-  updateAssetStock,
   updateOrderPaymentStatus,
   updateTransactionStatus
 } from './services/orderTransactionService';
 import { buildVietQrImageUrl, getBankInfoFromSharePoint, type IBankInfoRecord } from './services/bankInfoService';
+import { isUserAdmin } from './services/roleService';
 import styles from './OrderWorkspace.module.scss';
 
 export interface IOrderWorkspaceProps {
@@ -63,38 +63,99 @@ function createQrPlaceholder(): string {
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
-function sanitizeBuyerName(buyerName: string): string {
-  return (buyerName || 'CBNV').replace(/\s+/g, '').slice(0, 24);
+function buildTransferContent(buyerName: string, orderId: string): string {
+  const normalizedBuyerName: string = (buyerName || 'CBNV').trim();
+  const normalizedOrderId: string = (orderId || '').trim();
+
+  return (normalizedBuyerName + ' ' + normalizedOrderId).trim();
 }
 
 function padTwoDigits(value: number): string {
   return value < 10 ? '0' + String(value) : String(value);
 }
 
+function renderMenuIcon(icon: 'register' | 'cart' | 'orders' | 'admin'): React.ReactElement {
+  if (icon === 'register') {
+    return (
+      <svg className={styles.menuIconSvg} viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M7 4.75h7.5l3.75 3.75V19A1.25 1.25 0 0 1 17 20.25H7A1.25 1.25 0 0 1 5.75 19V6A1.25 1.25 0 0 1 7 4.75Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path d="M14.5 4.75V8.5h3.75" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M8.5 12h6.5M8.5 15.5h6.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (icon === 'cart') {
+    return (
+      <svg className={styles.menuIconSvg} viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M4.5 6.25h1.8l1.4 7.15a1 1 0 0 0 .98.8h7.88a1 1 0 0 0 .97-.76l1.18-5.19H7.1"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle cx="10" cy="17.75" r="1.25" fill="currentColor" />
+        <circle cx="16" cy="17.75" r="1.25" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (icon === 'orders') {
+    return (
+      <svg className={styles.menuIconSvg} viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="5.25" y="4.75" width="13.5" height="14.5" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M8.5 9h7M8.5 12h7M8.5 15h4.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className={styles.menuIconSvg} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 3.75 6.5 6v5.1c0 3.58 2.29 6.84 5.5 7.9 3.21-1.06 5.5-4.32 5.5-7.9V6L12 3.75Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <path d="M9.5 11.75 11 13.25l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function getOrderStateFromStatuses(
   paymentStatus: string,
   handoverStatus: string
 ): Pick<IOrderDetail, 'currentStep' | 'paymentStatus' | 'handoverStatus'> {
-  if (handoverStatus === 'Da ban giao') {
+  if (handoverStatus === 'Đã bàn giao') {
     return {
       currentStep: 'Hoàn tất',
-      paymentStatus: paymentStatus || 'Da thanh toan',
-      handoverStatus: 'Da ban giao'
+      paymentStatus: paymentStatus || 'Đã thanh toán',
+      handoverStatus: 'Đã bàn giao'
     };
   }
 
-  if (paymentStatus === 'Da thanh toan') {
+  if (paymentStatus === 'Đã thanh toán') {
     return {
       currentStep: 'Bàn giao',
-      paymentStatus: 'Da thanh toan',
-      handoverStatus: handoverStatus || 'Cho ban giao'
+      paymentStatus: 'Đã thanh toán',
+      handoverStatus: handoverStatus || 'Chờ bàn giao'
     };
   }
 
   return {
     currentStep: 'Thanh toán',
-    paymentStatus: paymentStatus || 'Cho xac nhan',
-    handoverStatus: handoverStatus || 'Chua ban giao'
+    paymentStatus: paymentStatus || 'Chờ xác nhận',
+    handoverStatus: handoverStatus || 'Chưa bàn giao'
   };
 }
 
@@ -111,8 +172,8 @@ function mapLineRecordToOrderItem(
     assetId: matchedAsset ? matchedAsset.id : line.productCode,
     assetCode: line.productCode,
     assetName: matchedAsset ? matchedAsset.assetName : line.productCode,
-    condition: matchedAsset ? matchedAsset.condition : 'Chua cap nhat',
-    site: matchedAsset ? matchedAsset.site : 'Chua cap nhat',
+    condition: matchedAsset ? matchedAsset.condition : 'Chưa cập nhật',
+    site: matchedAsset ? matchedAsset.site : 'Chưa cập nhật',
     quantity: line.quantity,
     unitPrice: line.unitPrice,
     amount: line.lineTotal,
@@ -127,16 +188,23 @@ function mapTransactionRecordToOrderDetail(
   bankInfo: IBankInfoRecord | undefined
 ): IOrderDetail {
   const orderState = getOrderStateFromStatuses(record.paymentStatus, record.status);
-  const compactBuyerName: string = sanitizeBuyerName(record.buyerName);
+  const transferContent: string = buildTransferContent(record.buyerName, record.orderId);
   const orderItems: IOrderItem[] = record.items.map((line: IUserTransactionLineRecord, index: number) =>
     mapLineRecordToOrderItem(record.orderId, line, assets, index)
   );
   const bankName: string = bankInfo ? bankInfo.bankName : 'Techcombank';
-  const accountName: string = bankInfo ? bankInfo.accountName : 'BAN HAN';
+  const accountName: string = bankInfo ? bankInfo.accountName : 'BÁN HÀNG';
   const accountNumber: string = bankInfo ? bankInfo.accountNumber : '';
   const qrImageUrl: string =
     bankInfo && bankInfo.accountNumber
-      ? buildVietQrImageUrl(bankInfo.qrBankSlug, bankInfo.accountNumber)
+      ? buildVietQrImageUrl(
+          bankInfo.qrBankSlug,
+          bankInfo.accountNumber,
+          'compact2',
+          record.totalAmount,
+          transferContent,
+          accountName
+        )
       : createQrPlaceholder();
 
   return {
@@ -150,14 +218,14 @@ function mapTransactionRecordToOrderDetail(
     paymentStatus: orderState.paymentStatus,
     handoverStatus: orderState.handoverStatus,
     bankAccount: {
-      bankName: bankName,
-      accountName: accountName,
-      accountNumber: accountNumber,
+      bankName,
+      accountName,
+      accountNumber,
       logoUrl: techcombankLogo
     },
     paymentQr: {
-      qrImageUrl: qrImageUrl,
-      transferContent: 'TT ' + record.orderCode + ' ' + compactBuyerName,
+      qrImageUrl,
+      transferContent,
       amount: record.totalAmount
     },
     items: orderItems
@@ -191,6 +259,7 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(null);
   const [assets, setAssets] = React.useState<IAssetItem[]>([]);
   const [bankInfo, setBankInfo] = React.useState<IBankInfoRecord | undefined>(undefined);
+  const [hasAdminRole, setHasAdminRole] = React.useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState<boolean>(false);
 
   React.useEffect(() => {
@@ -200,20 +269,37 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       })
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console
-        console.error('Khong the tai lich su giao dich cua nguoi dung', error);
+        console.error('Không thể tải lịch sử giao dịch của người dùng', error);
       });
   }, [props.siteUrl, props.spHttpClient, props.userEmail]);
 
   React.useEffect(() => {
+    isUserAdmin(props.siteUrl, props.spHttpClient, props.userEmail)
+      .then((result: boolean): void => {
+        setHasAdminRole(result);
+      })
+      .catch((error: Error): void => {
+        // eslint-disable-next-line no-console
+        console.error('Không thể kiểm tra quyền admin', error);
+        setHasAdminRole(false);
+      });
+  }, [props.siteUrl, props.spHttpClient, props.userEmail]);
+
+  React.useEffect(() => {
+    if (!hasAdminRole) {
+      setAdminTransactionRecords([]);
+      return;
+    }
+
     getAllTransactions(props.siteUrl, props.spHttpClient)
       .then((records: IUserTransactionRecord[]): void => {
         setAdminTransactionRecords(records);
       })
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console
-        console.error('Khong the tai danh sach giao dich admin', error);
+        console.error('Không thể tải danh sách giao dịch admin', error);
       });
-  }, [props.siteUrl, props.spHttpClient]);
+  }, [hasAdminRole, props.siteUrl, props.spHttpClient]);
 
   React.useEffect(() => {
     getBankInfoFromSharePoint(props.siteUrl, props.spHttpClient)
@@ -222,9 +308,15 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       })
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console
-        console.error('Khong the tai thong tin ngan hang', error);
+        console.error('Không thể tải thông tin ngân hàng', error);
       });
   }, [props.siteUrl, props.spHttpClient]);
+
+  React.useEffect(() => {
+    if (!hasAdminRole && activeTab === 'admin') {
+      setActiveTab('orders');
+    }
+  }, [activeTab, hasAdminRole]);
 
   const orders: IOrderDetail[] = React.useMemo((): IOrderDetail[] => {
     return transactionRecords.map((record: IUserTransactionRecord): IOrderDetail => {
@@ -328,91 +420,28 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       return;
     }
 
-    const stockUpdates: Array<{ assetId: string; nextStock: number }> = [];
-
-    for (let index: number = 0; index < targetOrder.items.length; index += 1) {
-      const orderItem: IOrderItem = targetOrder.items[index];
-      const matchedAsset: IAssetItem | undefined = assets.filter((asset: IAssetItem) => {
-        return asset.id === orderItem.assetId || asset.assetCode === orderItem.assetCode;
-      })[0];
-
-      if (!matchedAsset) {
-        window.alert('Khong tim thay tai san de tru ton: ' + orderItem.assetCode);
-        return;
-      }
-
-      const nextStock: number = matchedAsset.availableQuantity - orderItem.quantity;
-
-      if (nextStock < 0) {
-        window.alert('So luong ton hien tai khong du de xac nhan thanh toan.');
-        return;
-      }
-
-      stockUpdates.push({
-        assetId: matchedAsset.id,
-        nextStock
-      });
-    }
-
-    createPaymentHistoryItem({
+    updateOrderPaymentStatus({
       siteUrl: props.siteUrl,
       spHttpClient: props.spHttpClient,
-      transferContent: targetOrder.paymentQr.transferContent,
-      paymentConfirmedAt: new Date().toISOString()
+      orderId: targetOrder.orderCode,
+      paymentStatus: 'Đã thanh toán'
     })
-      .then((): Promise<void> => {
-        return updateOrderPaymentStatus({
-          siteUrl: props.siteUrl,
-          spHttpClient: props.spHttpClient,
-          orderId: targetOrder.orderCode,
-          paymentStatus: 'Da thanh toan'
-        });
-      })
       .then((): Promise<void> => {
         return updateTransactionStatus({
           siteUrl: props.siteUrl,
           spHttpClient: props.spHttpClient,
           orderId: targetOrder.orderCode,
-          status: 'Cho ban giao'
+          status: 'Chờ bàn giao'
         });
-      })
-      .then((): Promise<void[]> => {
-        return Promise.all(
-          stockUpdates.map((stockUpdate) =>
-            updateAssetStock({
-              siteUrl: props.siteUrl,
-              spHttpClient: props.spHttpClient,
-              assetItemId: stockUpdate.assetId,
-              nextStock: stockUpdate.nextStock
-            })
-          )
-        );
       })
       .then((): void => {
-        setAssets((prevAssets: IAssetItem[]): IAssetItem[] => {
-          return prevAssets.map((asset: IAssetItem): IAssetItem => {
-            const matchedUpdate = stockUpdates.filter((stockUpdate) => stockUpdate.assetId === asset.id)[0];
-
-            if (!matchedUpdate) {
-              return asset;
-            }
-
-            return {
-              ...asset,
-              totalQuantity: matchedUpdate.nextStock,
-              availableQuantity: matchedUpdate.nextStock,
-              statusText: matchedUpdate.nextStock > 0 ? 'Con hang' : 'Het hang'
-            };
-          });
-        });
-
-        updatePaymentStatusInState(orderId, 'Da thanh toan');
-        updateTransactionStatusInState(orderId, 'Cho ban giao');
+        updatePaymentStatusInState(orderId, 'Đã thanh toán');
+        updateTransactionStatusInState(orderId, 'Chờ bàn giao');
       })
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console
-        console.error('Khong the xac nhan thanh toan', error);
-        window.alert('Khong the xac nhan thanh toan tren SharePoint.');
+        console.error('Không thể xác nhận thanh toán', error);
+        window.alert('Không thể xác nhận thanh toán trên SharePoint.');
       });
   }
 
@@ -421,15 +450,15 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       siteUrl: props.siteUrl,
       spHttpClient: props.spHttpClient,
       orderId,
-      status: 'Da ban giao'
+      status: 'Đã bàn giao'
     })
       .then((): void => {
-        updateTransactionStatusInState(orderId, 'Da ban giao');
+        updateTransactionStatusInState(orderId, 'Đã bàn giao');
       })
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console
-        console.error('Khong the xac nhan ban giao', error);
-        window.alert('Khong the xac nhan ban giao tren SharePoint.');
+        console.error('Không thể xác nhận bàn giao', error);
+        window.alert('Không thể xác nhận bàn giao trên SharePoint.');
       });
   }
 
@@ -443,6 +472,10 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
   }
 
   function showAdminList(): void {
+    if (!hasAdminRole) {
+      return;
+    }
+
     setSelectedOrderId(null);
     setActiveTab('admin');
   }
@@ -456,8 +489,8 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
           <div className={styles.sidebarHeader}>
             {!isSidebarCollapsed && (
               <div className={styles.brandBlock}>
-                <span className={styles.brandEyebrow}>Workspace</span>
-                <strong className={styles.brandTitle}>Mua tai san noi bo</strong>
+                <img className={styles.brandLogo} src={logoMag} alt="Logo MAG" />
+                <strong className={styles.brandTitle}>Mua tài sản nội bộ</strong>
               </div>
             )}
 
@@ -467,14 +500,14 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
               onClick={(): void => {
                 setIsSidebarCollapsed((prevState: boolean) => !prevState);
               }}
-              aria-label={isSidebarCollapsed ? 'Mo rong menu' : 'Thu gon menu'}
-              title={isSidebarCollapsed ? 'Mo rong menu' : 'Thu gon menu'}
+              aria-label={isSidebarCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
+              title={isSidebarCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
             >
               {isSidebarCollapsed ? '>' : '<'}
             </button>
           </div>
 
-          <nav className={styles.menuList} aria-label="Dieu huong chuc nang">
+          <nav className={styles.menuList} aria-label="Điều hướng chức năng">
             <button
               type="button"
               className={
@@ -487,16 +520,16 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
               onClick={(): void => {
                 setActiveTab('register');
               }}
-              aria-label="Dang ky mua tai san"
-              title="Dang ky mua tai san"
+              aria-label="Đăng ký mua tài sản"
+              title="Đăng ký mua tài sản"
             >
               <span className={styles.menuIcon} aria-hidden="true">
-                R
+                {renderMenuIcon('register')}
               </span>
               {!isSidebarCollapsed && (
                 <span className={styles.menuText}>
-                  <span className={styles.menuLabel}>Dang ky mua</span>
-                  <span className={styles.menuHint}>Tim va dang ky tai san thanh ly</span>
+                  <span className={styles.menuLabel}>Đăng ký mua</span>
+                  <span className={styles.menuHint}>Tìm và đăng ký tài sản thanh lý</span>
                 </span>
               )}
             </button>
@@ -513,16 +546,16 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
               onClick={(): void => {
                 setActiveTab('cart');
               }}
-              aria-label="Gio hang"
-              title="Gio hang"
+              aria-label="Giỏ hàng"
+              title="Giỏ hàng"
             >
               <span className={styles.menuIcon} aria-hidden="true">
-                C
+                {renderMenuIcon('cart')}
               </span>
               {!isSidebarCollapsed && (
                 <span className={styles.menuText}>
-                  <span className={styles.menuLabel}>Gio hang</span>
-                  <span className={styles.menuHint}>Quan ly cac san pham da them vao gio</span>
+                  <span className={styles.menuLabel}>Giỏ hàng</span>
+                  <span className={styles.menuHint}>Quản lý các sản phẩm đã thêm vào giỏ</span>
                 </span>
               )}
             </button>
@@ -537,43 +570,45 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
                 (isSidebarCollapsed ? styles.menuButtonCollapsed : '')
               }
               onClick={showOrderList}
-              aria-label={'Danh sach giao dich ' + String(orders.length)}
-              title={'Danh sach giao dich (' + String(orders.length) + ')'}
+              aria-label={'Danh sách giao dịch ' + String(orders.length)}
+              title={'Danh sách giao dịch (' + String(orders.length) + ')'}
             >
               <span className={styles.menuIcon} aria-hidden="true">
-                O
+                {renderMenuIcon('orders')}
               </span>
               {!isSidebarCollapsed && (
                 <span className={styles.menuText}>
-                  <span className={styles.menuLabel}>Danh sach giao dich</span>
-                  <span className={styles.menuHint}>Tat ca giao dich cua ban ({orders.length})</span>
+                  <span className={styles.menuLabel}>Danh sách giao dịch</span>
+                  <span className={styles.menuHint}>Tất cả giao dịch của bạn ({orders.length})</span>
                 </span>
               )}
             </button>
 
-            <button
-              type="button"
-              className={
-                styles.menuButton +
-                ' ' +
-                (activeTab === 'admin' ? styles.menuButtonActive : '') +
-                ' ' +
-                (isSidebarCollapsed ? styles.menuButtonCollapsed : '')
-              }
-              onClick={showAdminList}
-              aria-label={'Quan ly giao dich admin ' + String(adminOrders.length)}
-              title={'Quan ly giao dich admin (' + String(adminOrders.length) + ')'}
-            >
-              <span className={styles.menuIcon} aria-hidden="true">
-                A
-              </span>
-              {!isSidebarCollapsed && (
-                <span className={styles.menuText}>
-                  <span className={styles.menuLabel}>Quan ly giao dich</span>
-                  <span className={styles.menuHint}>Theo doi tat ca don hang ({adminOrders.length})</span>
+            {hasAdminRole && (
+              <button
+                type="button"
+                className={
+                  styles.menuButton +
+                  ' ' +
+                  (activeTab === 'admin' ? styles.menuButtonActive : '') +
+                  ' ' +
+                  (isSidebarCollapsed ? styles.menuButtonCollapsed : '')
+                }
+                onClick={showAdminList}
+                aria-label={'Quản lý giao dịch admin ' + String(adminOrders.length)}
+                title={'Quản lý giao dịch admin (' + String(adminOrders.length) + ')'}
+              >
+                <span className={styles.menuIcon} aria-hidden="true">
+                  {renderMenuIcon('admin')}
                 </span>
-              )}
-            </button>
+                {!isSidebarCollapsed && (
+                  <span className={styles.menuText}>
+                    <span className={styles.menuLabel}>Quản lý giao dịch</span>
+                    <span className={styles.menuHint}>Theo dõi tất cả đơn hàng ({adminOrders.length})</span>
+                  </span>
+                )}
+              </button>
+            )}
           </nav>
         </aside>
 
@@ -600,13 +635,14 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
           ) : selectedOrder ? (
             <OrderDetailPage
               orderDetail={selectedOrder}
+              isAdmin={hasAdminRole}
               onConfirmPayment={handleConfirmPayment}
               onConfirmHandover={handleConfirmHandover}
               onBack={(): void => {
                 setSelectedOrderId(null);
               }}
             />
-          ) : activeTab === 'admin' ? (
+          ) : hasAdminRole && activeTab === 'admin' ? (
             <AdminTransactionPage orders={adminOrders} onOpenOrder={openOrderDetail} />
           ) : (
             <OrderListPage orders={orders} onOpenOrder={openOrderDetail} />

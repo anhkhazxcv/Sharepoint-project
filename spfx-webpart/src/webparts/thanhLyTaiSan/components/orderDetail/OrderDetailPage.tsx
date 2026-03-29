@@ -9,6 +9,7 @@ import styles from './OrderDetailPage.module.scss';
 
 export interface IOrderDetailPageProps {
   orderDetail?: IOrderDetail;
+  isAdmin?: boolean;
   onBack?: () => void;
   onConfirmPayment?: (orderId: string) => void;
   onConfirmHandover?: (orderId: string) => void;
@@ -33,18 +34,12 @@ export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElemen
   if (!props.orderDetail) {
     return (
       <div className={styles.page}>
-        <div className={styles.skeletonTitle}>Khong co du lieu don hang.</div>
+        <div className={styles.skeletonTitle}>Không có dữ liệu đơn hàng.</div>
       </div>
     );
   }
 
   const orderDetail: IOrderDetail = props.orderDetail;
-
-  function showMockAction(message: string): void {
-    // eslint-disable-next-line no-console
-    console.log(message, orderDetail.orderCode);
-    window.alert(message);
-  }
 
   if (isLoading) {
     return (
@@ -67,10 +62,10 @@ export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElemen
       <header className={styles.pageHeader}>
         {props.onBack && (
           <button type="button" className={styles.backButton} onClick={props.onBack}>
-            Quay lai danh sach don
+            Quay lại danh sách đơn
           </button>
         )}
-        <h1 className={styles.title}>Chi tiet Don hang: {orderDetail.orderCode}</h1>
+        <h1 className={styles.title}>Chi tiết Đơn hàng: {orderDetail.orderCode}</h1>
       </header>
 
       <OrderSummaryCard
@@ -84,17 +79,18 @@ export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElemen
           <OrderItemsSection
             items={orderDetail.items}
             currentStep={orderDetail.currentStep}
+            paymentStatus={orderDetail.paymentStatus}
+            handoverStatus={orderDetail.handoverStatus}
+            isAdmin={!!props.isAdmin}
             onConfirmPayment={function (): void {
               if (props.onConfirmPayment) {
                 props.onConfirmPayment(orderDetail.orderId);
               }
-              showMockAction('Da xac nhan thanh toan va chuyen sang ban giao');
             }}
             onConfirmHandover={function (): void {
               if (props.onConfirmHandover) {
                 props.onConfirmHandover(orderDetail.orderId);
               }
-              showMockAction('Da xac nhan ban giao tai san');
             }}
           />
         </div>

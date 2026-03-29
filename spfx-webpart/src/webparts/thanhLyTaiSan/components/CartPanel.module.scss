@@ -1,10 +1,10 @@
 .panel {
   margin-bottom: 20px;
   padding: 18px;
-  border: 1px solid #d6dee8;
-  border-radius: 14px;
-  background: #ffffff;
-  box-shadow: 0 10px 30px rgba(15, 47, 87, 0.06);
+  border: 1px solid #e5d8c3;
+  border-radius: 12px;
+  background: #fffdfa;
+  box-shadow: 0 8px 24px rgba(98, 77, 40, 0.06);
 }
 
 .header {
@@ -17,14 +17,14 @@
 .title {
   display: block;
   font-size: 18px;
-  color: #123456;
+  color: #6a4a1d;
 }
 
 .subtitle {
   display: block;
   margin-top: 4px;
   font-size: 13px;
-  color: #64748b;
+  color: #736557;
 }
 
 .summary {
@@ -33,14 +33,14 @@
   align-items: flex-end;
   gap: 4px;
   font-size: 13px;
-  color: #334155;
+  color: #5a5044;
 }
 
 .emptyState {
   padding: 18px;
   border-radius: 12px;
-  background: #f8fafc;
-  color: #64748b;
+  background: #f7f3ec;
+  color: #736557;
   text-align: center;
 }
 
@@ -56,9 +56,9 @@
   gap: 12px;
   align-items: center;
   padding: 12px 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #eadfce;
   border-radius: 12px;
-  background: #fbfdff;
+  background: #fffdfa;
 }
 
 .checkboxWrap {
@@ -80,21 +80,21 @@
 
 .itemInfo span {
   font-size: 12px;
-  color: #64748b;
+  color: #7c6f61;
 }
 
 .quantityBox {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #334155;
+  color: #5a5044;
 }
 
 .quantityBox input {
   width: 74px;
   height: 36px;
   padding: 0 10px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #d8c9ae;
   border-radius: 8px;
 }
 
@@ -109,17 +109,17 @@
 .removeButton {
   height: 36px;
   padding: 0 12px;
-  border: 1px solid #fecaca;
+  border: 1px solid #ecd1cb;
   border-radius: 8px;
-  background: #fff5f5;
-  color: #b91c1c;
+  background: #fff8f7;
+  color: #a24b3d;
   cursor: pointer;
 }
 
 .footer {
   margin-top: 14px;
   padding-top: 14px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid #eadfce;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -130,7 +130,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: #334155;
+  color: #5a5044;
 }
 
 .checkoutButton {
@@ -138,7 +138,7 @@
   padding: 0 18px;
   border: none;
   border-radius: 999px;
-  background: #0f2f57;
+  background: #8a6222;
   color: #ffffff;
   font-weight: 700;
   cursor: pointer;

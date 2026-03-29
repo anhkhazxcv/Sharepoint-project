@@ -71,7 +71,7 @@ export const mockOrderDetail: IOrderDetail = {
   handoverStatus: 'Chưa bàn giao',
   bankAccount: {
     bankName: 'Vietcombank',
-    accountName: 'BAN HAN',
+    accountName: 'BÁN HÀNG',
     accountNumber: '891260009',
     logoUrl: techcombankLogo
   },
@@ -86,8 +86,8 @@ export const mockOrderDetail: IOrderDetail = {
       assetId: '1',
       assetCode: 'TS001',
       assetName: 'Laptop Dell XPS 13',
-      condition: 'Moi',
-      site: 'Ha Noi',
+      condition: 'Mới',
+      site: 'Hà Nội',
       quantity: 1,
       unitPrice: 15000000,
       amount: 15000000,
@@ -98,9 +98,9 @@ export const mockOrderDetail: IOrderDetail = {
       id: '10000000000102',
       assetId: '2',
       assetCode: 'TS002',
-      assetName: 'Man hinh Dell 24"',
-      condition: 'Tot',
-      site: 'Ha Noi',
+      assetName: 'Màn hình Dell 24"',
+      condition: 'Tốt',
+      site: 'Hà Nội',
       quantity: 1,
       unitPrice: 6000000,
       amount: 6000000,
@@ -130,7 +130,7 @@ export function createOrderDetailFromCartItems(
     handoverStatus: 'Chưa bàn giao',
     bankAccount: {
       bankName: 'Vietcombank',
-      accountName: 'BAN HAN',
+      accountName: 'BÁN HÀNG',
       accountNumber: '891260009',
       logoUrl: techcombankLogo
     },

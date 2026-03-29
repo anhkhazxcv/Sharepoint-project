@@ -2,6 +2,7 @@ import { SPHttpClient, SPHttpClientResponse } from '@microsoft/sp-http';
 
 const BANK_INFO_LIST_TITLE: string = 'lstThongTinNganHang';
 const DEFAULT_QR_BANK_SLUG: string = 'techcombank';
+const DEFAULT_QR_TEMPLATE: string = 'compact2';
 
 export interface IBankInfoRecord {
   bankName: string;
@@ -25,12 +26,44 @@ function getStringValue(item: TSharePointItem, candidates: string[], fallback: s
   return fallback;
 }
 
-export function buildVietQrImageUrl(bankSlug: string, accountNumber: string): string {
+export function buildVietQrImageUrl(
+  bankSlug: string,
+  accountNumber: string,
+  template: string = DEFAULT_QR_TEMPLATE,
+  amount?: number,
+  addInfo?: string,
+  accountName?: string
+): string {
   if (!accountNumber) {
     return '';
   }
 
-  return 'https://img.vietqr.io/image/' + bankSlug + '-' + accountNumber + '-compact2.png';
+  const normalizedBankSlug: string = bankSlug || DEFAULT_QR_BANK_SLUG;
+  const normalizedTemplate: string = template || DEFAULT_QR_TEMPLATE;
+  const queryParts: string[] = [];
+
+  if (typeof amount === 'number' && !isNaN(amount) && amount > 0) {
+    queryParts.push('amount=' + encodeURIComponent(String(Math.round(amount))));
+  }
+
+  if (addInfo) {
+    queryParts.push('addInfo=' + encodeURIComponent(addInfo));
+  }
+
+  if (accountName) {
+    queryParts.push('accountName=' + encodeURIComponent(accountName));
+  }
+
+  return (
+    'https://img.vietqr.io/image/' +
+    normalizedBankSlug +
+    '-' +
+    accountNumber +
+    '-' +
+    normalizedTemplate +
+    '.png' +
+    (queryParts.length ? '?' + queryParts.join('&') : '')
+  );
 }
 
 export async function getBankInfoFromSharePoint(
@@ -54,7 +87,7 @@ export async function getBankInfoFromSharePoint(
 
   if (!response.ok) {
     const errorText: string = await response.text();
-    throw new Error('Khong the doc du lieu tu SharePoint list ' + BANK_INFO_LIST_TITLE + '. Response: ' + errorText);
+    throw new Error('Không thể đọc dữ liệu từ SharePoint list ' + BANK_INFO_LIST_TITLE + '. Response: ' + errorText);
   }
 
   const json: { value?: TSharePointItem[] } = (await response.json()) as { value?: TSharePointItem[] };
@@ -66,7 +99,7 @@ export async function getBankInfoFromSharePoint(
 
   return {
     bankName: getStringValue(items[0], ['NameBank'], 'Techcombank'),
-    accountName: getStringValue(items[0], ['NamePeople'], 'Chua cap nhat'),
+    accountName: getStringValue(items[0], ['NamePeople'], 'Chưa cập nhật'),
     accountNumber: getStringValue(items[0], ['STK'], ''),
     qrBankSlug: DEFAULT_QR_BANK_SLUG
   };

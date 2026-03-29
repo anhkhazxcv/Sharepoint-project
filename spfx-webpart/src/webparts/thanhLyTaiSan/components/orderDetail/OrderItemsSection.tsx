@@ -7,6 +7,9 @@ import styles from './OrderItemsSection.module.scss';
 export interface IOrderItemsSectionProps {
   items: IOrderItem[];
   currentStep: TProcessStep;
+  paymentStatus: string;
+  handoverStatus: string;
+  isAdmin: boolean;
   onConfirmPayment: () => void;
   onConfirmHandover: () => void;
 }
@@ -20,6 +23,9 @@ export function OrderItemsSection(props: IOrderItemsSectionProps): React.ReactEl
 
       <ActionToolbar
         currentStep={props.currentStep}
+        paymentStatus={props.paymentStatus}
+        handoverStatus={props.handoverStatus}
+        isAdmin={props.isAdmin}
         onConfirmPayment={props.onConfirmPayment}
         onConfirmHandover={props.onConfirmHandover}
       />

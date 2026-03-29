@@ -30,17 +30,17 @@ export function CartPanel(props: ICartPanelProps): React.ReactElement {
     <section className={styles.panel}>
       <div className={styles.header}>
         <div>
-          <strong className={styles.title}>Gio hang</strong>
-          <span className={styles.subtitle}>Chon san pham, cap nhat so luong hoac xoa khoi gio truoc khi tao don.</span>
+          <strong className={styles.title}>Giỏ hàng</strong>
+          <span className={styles.subtitle}>Chọn sản phẩm, cập nhật số lượng hoặc xóa khỏi giỏ trước khi tạo đơn.</span>
         </div>
         <div className={styles.summary}>
-          <span>{props.items.length} san pham</span>
-          <span>{selectedQuantity}/{props.maxSelectableQuantity} so luong da chon</span>
+          <span>{props.items.length} sản phẩm</span>
+          <span>{selectedQuantity}/{props.maxSelectableQuantity} số lượng đã chọn</span>
         </div>
       </div>
 
       {!props.items.length ? (
-        <div className={styles.emptyState}>Chua co san pham nao trong gio hang.</div>
+        <div className={styles.emptyState}>Chưa có sản phẩm nào trong giỏ hàng.</div>
       ) : (
         <div className={styles.list}>
           {props.items.map((item: ICartItem) => {
@@ -62,7 +62,7 @@ export function CartPanel(props: ICartPanelProps): React.ReactElement {
                 <div className={styles.itemInfo}>
                   <strong>{item.assetName}</strong>
                   <span>
-                    {item.productCode} | {item.site} | {item.condition}
+                    {item.productCode} | {item.site} | {item.condition} | Tồn: {item.availableQuantity}
                   </span>
                 </div>
 
@@ -85,7 +85,7 @@ export function CartPanel(props: ICartPanelProps): React.ReactElement {
                 </div>
 
                 <button type="button" className={styles.removeButton} onClick={() => props.onRemove(item.productCode)}>
-                  Xoa
+                  Xóa
                 </button>
               </div>
             );
@@ -95,7 +95,7 @@ export function CartPanel(props: ICartPanelProps): React.ReactElement {
 
       <div className={styles.footer}>
         <div className={styles.checkoutInfo}>
-          <span>{selectedItems.length} dong duoc chon</span>
+          <span>{selectedItems.length} dòng được chọn</span>
           <strong>{formatCurrency(selectedAmount)}</strong>
         </div>
         <button
@@ -104,7 +104,7 @@ export function CartPanel(props: ICartPanelProps): React.ReactElement {
           disabled={!selectedItems.length || props.isCheckingOut}
           onClick={props.onCheckoutSelected}
         >
-          {props.isCheckingOut ? 'Dang tao don...' : 'Tao don tu muc da chon'}
+          {props.isCheckingOut ? 'Đang tạo đơn...' : 'Tạo đơn từ mục đã chọn'}
         </button>
       </div>
     </section>

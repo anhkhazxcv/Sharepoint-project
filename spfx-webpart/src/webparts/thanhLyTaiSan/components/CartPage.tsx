@@ -6,11 +6,22 @@ import type { IOrderDetail } from './orderDetail/types';
 import { createOrderDetailFromCartItems } from './orderDetail/mockOrderDetail';
 import { getAssetsFromSharePoint } from './services/assetCatalogService';
 import { clearCartItems, getCartItemsByUser, upsertCartItem } from './services/cartService';
-import { createTransactionItem, generateUniqueOrderId } from './services/orderTransactionService';
+import {
+  createTransactionItem,
+  generateUniqueOrderId,
+  rollbackTransactionOrder,
+  updateAssetStock
+} from './services/orderTransactionService';
 import styles from './CartPage.module.scss';
 
 const SHAREPOINT_LIST_TITLE: string = 'lstSanPham';
 const PURCHASE_LIMIT: number = 5;
+
+interface IPreparedStockUpdate {
+  assetItemId: string;
+  previousStock: number;
+  nextStock: number;
+}
 
 export interface ICartPageProps {
   userDisplayName?: string;
@@ -49,6 +60,55 @@ function formatCartItems(
       };
     })
     .filter((item): item is ICartItem => !!item);
+}
+
+async function applyStockUpdatesWithRollback(
+  siteUrl: string,
+  spHttpClient: SPHttpClient,
+  orderId: string,
+  stockUpdates: IPreparedStockUpdate[]
+): Promise<void> {
+  const appliedUpdates: IPreparedStockUpdate[] = [];
+
+  try {
+    for (let index: number = 0; index < stockUpdates.length; index += 1) {
+      const stockUpdate: IPreparedStockUpdate = stockUpdates[index];
+
+      await updateAssetStock({
+        siteUrl,
+        spHttpClient,
+        assetItemId: stockUpdate.assetItemId,
+        nextStock: stockUpdate.nextStock
+      });
+
+      appliedUpdates.push(stockUpdate);
+    }
+  } catch (stockError) {
+    await Promise.all(
+      appliedUpdates.map((stockUpdate: IPreparedStockUpdate) =>
+        updateAssetStock({
+          siteUrl,
+          spHttpClient,
+          assetItemId: stockUpdate.assetItemId,
+          nextStock: stockUpdate.previousStock
+        }).catch((rollbackError) => {
+          // eslint-disable-next-line no-console
+          console.error('Không thể hoàn tác tồn kho cho sản phẩm', stockUpdate.assetItemId, rollbackError);
+        })
+      )
+    );
+
+    await rollbackTransactionOrder({
+      siteUrl,
+      spHttpClient,
+      orderId
+    }).catch((rollbackOrderError: Error) => {
+      // eslint-disable-next-line no-console
+      console.error('Không thể hoàn tác đơn hàng sau khi lỗi trừ tồn', rollbackOrderError);
+    });
+
+    throw stockError;
+  }
 }
 
 export function CartPage(props: ICartPageProps): React.ReactElement {
@@ -106,8 +166,8 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
         }
 
         // eslint-disable-next-line no-console
-        console.error('Khong the tai gio hang', error);
-        setLoadError('Khong tai duoc gio hang tu SharePoint.');
+        console.error('Không thể tải giỏ hàng', error);
+        setLoadError('Không tải được giỏ hàng từ SharePoint.');
         setIsLoading(false);
       });
 
@@ -139,8 +199,12 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
       const maxAvailableForItem: number = Math.max(remainingLimit - otherQuantity, 0);
 
       if (maxAvailableForItem < 1) {
-        window.alert('Ban da dat gioi han mua toi da.');
+        window.alert('Bạn đã đạt giới hạn mua tối đa.');
         return;
+      }
+
+      if (sanitizedQuantity > maxAvailableForItem) {
+        window.alert('Bạn đã đăng ký vượt quá giới hạn mua. Vui lòng giảm số lượng.');
       }
 
       const allowedQuantity: number = Math.min(sanitizedQuantity, maxAvailableForItem);
@@ -157,8 +221,8 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
         .then(() => loadCartItems(assets))
         .catch((error: Error) => {
           // eslint-disable-next-line no-console
-          console.error('Khong the cap nhat gio hang', error);
-          window.alert('Khong the cap nhat gio hang tren SharePoint.');
+          console.error('Không thể cập nhật giỏ hàng', error);
+          window.alert('Không thể cập nhật giỏ hàng trên SharePoint.');
         });
     },
     [assets, cartItems, cartQuantity, displayName, loadCartItems, props.siteUrl, props.spHttpClient, props.userEmail, remainingLimit]
@@ -175,8 +239,8 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
         .then(() => loadCartItems(assets))
         .catch((error: Error) => {
           // eslint-disable-next-line no-console
-          console.error('Khong the xoa khoi gio hang', error);
-          window.alert('Khong the xoa san pham khoi gio hang tren SharePoint.');
+          console.error('Không thể xóa khỏi giỏ hàng', error);
+          window.alert('Không thể xóa sản phẩm khỏi giỏ hàng trên SharePoint.');
         });
     },
     [assets, loadCartItems, props.siteUrl, props.spHttpClient, props.userEmail]
@@ -186,15 +250,49 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
     const selectedItems: ICartItem[] = cartItems.filter((item: ICartItem) => selectedCartProductCodes.indexOf(item.productCode) >= 0);
 
     if (!selectedItems.length) {
-      window.alert('Vui long chon it nhat mot san pham trong gio hang.');
+      window.alert('Vui lòng chọn ít nhất một sản phẩm trong giỏ hàng.');
       return;
     }
 
     setIsCheckingOut(true);
 
-    generateUniqueOrderId(props.siteUrl, props.spHttpClient)
-      .then((generatedOrderId: string) => {
-        const nextOrder: IOrderDetail = createOrderDetailFromCartItems(selectedItems, displayName, generatedOrderId);
+    getAssetsFromSharePoint({
+      siteUrl: props.siteUrl,
+      listTitle: SHAREPOINT_LIST_TITLE,
+      spHttpClient: props.spHttpClient
+    })
+      .then((latestAssets: IAssetItem[]) => {
+        const stockUpdates: IPreparedStockUpdate[] = [];
+        const unavailableItems: ICartItem[] = selectedItems.filter((selectedItem: ICartItem) => {
+          const latestAsset: IAssetItem | undefined = latestAssets.filter((asset: IAssetItem) => asset.assetCode === selectedItem.productCode)[0];
+
+          if (latestAsset && latestAsset.availableQuantity >= selectedItem.quantity) {
+            stockUpdates.push({
+              assetItemId: latestAsset.id,
+              previousStock: latestAsset.availableQuantity,
+              nextStock: latestAsset.availableQuantity - selectedItem.quantity
+            });
+          }
+
+          return !latestAsset || latestAsset.availableQuantity < selectedItem.quantity;
+        });
+
+        if (unavailableItems.length) {
+          const unavailableNames: string = unavailableItems.map((item: ICartItem) => item.assetName).join(', ');
+          setAssets(latestAssets);
+          window.alert('Sản phẩm không còn đủ số lượng để tạo đơn: ' + unavailableNames + '. Vui lòng chọn sản phẩm khác.');
+          throw new Error('Insufficient stock for selected items.');
+        }
+
+        setAssets(latestAssets);
+        return generateUniqueOrderId(props.siteUrl, props.spHttpClient).then((generatedOrderId: string) => ({
+          generatedOrderId,
+          latestAssets,
+          stockUpdates
+        }));
+      })
+      .then((payload: { generatedOrderId: string; latestAssets: IAssetItem[]; stockUpdates: IPreparedStockUpdate[] }) => {
+        const nextOrder: IOrderDetail = createOrderDetailFromCartItems(selectedItems, displayName, payload.generatedOrderId);
 
         return createTransactionItem({
           siteUrl: props.siteUrl,
@@ -202,24 +300,47 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
           buyerName: displayName,
           buyerEmail: props.userEmail,
           orderDetail: nextOrder
-        }).then(() => nextOrder);
+        }).then(() =>
+          applyStockUpdatesWithRollback(props.siteUrl, props.spHttpClient, nextOrder.orderCode, payload.stockUpdates).then(() => ({
+            createdOrder: nextOrder,
+            latestAssets: payload.latestAssets
+          }))
+        );
       })
-      .then((createdOrder: IOrderDetail) => {
+      .then((payload: { createdOrder: IOrderDetail; latestAssets: IAssetItem[] }) => {
         return clearCartItems({
           siteUrl: props.siteUrl,
           spHttpClient: props.spHttpClient,
           buyerEmail: props.userEmail,
           productCodes: selectedItems.map((item: ICartItem) => item.productCode)
-        }).then(() => createdOrder);
+        }).then(() => payload);
       })
-      .then((createdOrder: IOrderDetail) => {
-        return loadCartItems(assets).then(() => createdOrder);
+      .then((payload: { createdOrder: IOrderDetail; latestAssets: IAssetItem[] }) => {
+        const nextAssets: IAssetItem[] = payload.latestAssets.map((asset: IAssetItem): IAssetItem => {
+          const selectedItem: ICartItem | undefined = selectedItems.filter((item: ICartItem) => item.assetId === asset.id)[0];
+
+          if (!selectedItem) {
+            return asset;
+          }
+
+          const nextStock: number = Math.max(asset.availableQuantity - selectedItem.quantity, 0);
+
+          return {
+            ...asset,
+            totalQuantity: nextStock,
+            availableQuantity: nextStock,
+            statusText: nextStock > 0 ? 'Còn hàng' : 'Hết hàng'
+          };
+        });
+
+        setAssets(nextAssets);
+        return loadCartItems(nextAssets).then(() => payload.createdOrder);
       })
       .then((createdOrder: IOrderDetail) => {
         setSelectedCartProductCodes([]);
 
         if (typeof window !== 'undefined' && window.alert) {
-          window.alert('Tao don hang thanh cong. Ma don hang: ' + createdOrder.orderCode);
+          window.alert('Tạo đơn hàng thành công. Mã đơn hàng: ' + createdOrder.orderCode);
         }
 
         if (props.onPurchaseSuccess) {
@@ -228,8 +349,13 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
       })
       .catch((error: Error) => {
         // eslint-disable-next-line no-console
-        console.error('Khong the tao don mua tren SharePoint', error);
-        window.alert('Khong the tao don mua tren SharePoint. Vui long thu lai hoac lien he IT Support.');
+        console.error('Không thể tạo đơn mua trên SharePoint', error);
+
+        if (error.message === 'Insufficient stock for selected items.') {
+          return;
+        }
+
+        window.alert('Không thể tạo đơn mua trên SharePoint. Nếu hệ thống đã tạo đơn nhưng trừ tồn thất bại, đơn đã được hoàn tác tự động.');
       })
       .then(
         () => {
@@ -239,23 +365,19 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
           setIsCheckingOut(false);
         }
       );
-  }, [assets, cartItems, displayName, loadCartItems, props, selectedCartProductCodes]);
+  }, [cartItems, displayName, loadCartItems, props, selectedCartProductCodes]);
 
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <strong className={styles.title}>Quan ly gio hang</strong>
-          <span className={styles.subtitle}>Cap nhat so luong, xoa san pham va tao don mua tu cac muc da chon.</span>
-        </div>
-        <div className={styles.meta}>
-          <span>Site: {props.siteUrl}</span>
-          <span>Gioi han con lai: {remainingLimit}</span>
+          <strong className={styles.title}>Quản lý giỏ hàng</strong>
+          <span className={styles.subtitle}>Cập nhật số lượng, xóa sản phẩm và tạo đơn mua từ các mục đã chọn.</span>
         </div>
       </div>
 
       {isLoading ? (
-        <div className={styles.loadingState}>Dang tai gio hang...</div>
+        <div className={styles.loadingState}>Đang tải giỏ hàng...</div>
       ) : loadError ? (
         <div className={styles.errorState}>{loadError}</div>
       ) : (

@@ -43,6 +43,12 @@ export interface IUpdateAssetStockOptions {
   nextStock: number;
 }
 
+export interface IRollbackTransactionOrderOptions {
+  siteUrl: string;
+  spHttpClient: SPHttpClient;
+  orderId: string;
+}
+
 export interface IUserTransactionLineRecord {
   productCode: string;
   quantity: number;
@@ -139,7 +145,7 @@ async function postListItem(
 
   if (!response.ok) {
     const errorText: string = await response.text();
-    throw new Error('Khong the ghi du lieu vao SharePoint list ' + listTitle + '. Response: ' + errorText);
+    throw new Error('Không thể ghi dữ liệu vào SharePoint list ' + listTitle + '. Response: ' + errorText);
   }
 }
 
@@ -167,7 +173,7 @@ async function getListItemByFilter(
 
   if (!response.ok) {
     const errorText: string = await response.text();
-    throw new Error('Khong the doc du lieu tu SharePoint list ' + listTitle + '. Response: ' + errorText);
+    throw new Error('Không thể đọc dữ liệu từ SharePoint list ' + listTitle + '. Response: ' + errorText);
   }
 
   const json: { value?: Array<{ Id: number }> } = (await response.json()) as { value?: Array<{ Id: number }> };
@@ -209,7 +215,38 @@ async function updateListItemById(
 
   if (!response.ok) {
     const errorText: string = await response.text();
-    throw new Error('Khong the cap nhat du lieu trong SharePoint list ' + listTitle + '. Response: ' + errorText);
+    throw new Error('Không thể cập nhật dữ liệu trong SharePoint list ' + listTitle + '. Response: ' + errorText);
+  }
+}
+
+async function deleteListItemById(
+  siteUrl: string,
+  spHttpClient: SPHttpClient,
+  listTitle: string,
+  itemId: number
+): Promise<void> {
+  const requestUrl: string =
+    siteUrl.replace(/\/$/, '') +
+    "/_api/web/lists/getbytitle('" +
+    encodeURIComponent(listTitle) +
+    "')/items(" +
+    String(itemId) +
+    ')';
+  const response: SPHttpClientResponse = await spHttpClient.post(
+    requestUrl,
+    SPHttpClient.configurations.v1,
+    {
+      headers: {
+        Accept: 'application/json;odata.metadata=none',
+        'IF-MATCH': '*',
+        'X-HTTP-Method': 'DELETE'
+      }
+    }
+  );
+
+  if (!response.ok) {
+    const errorText: string = await response.text();
+    throw new Error('Không thể xóa dữ liệu trong SharePoint list ' + listTitle + '. Response: ' + errorText);
   }
 }
 
@@ -239,7 +276,7 @@ async function getListItems(
 
   if (!response.ok) {
     const errorText: string = await response.text();
-    throw new Error('Khong the doc du lieu tu SharePoint list ' + listTitle + '. Response: ' + errorText);
+    throw new Error('Không thể đọc dữ liệu từ SharePoint list ' + listTitle + '. Response: ' + errorText);
   }
 
   const json: { value?: TSharePointItem[] } = (await response.json()) as { value?: TSharePointItem[] };
@@ -261,7 +298,7 @@ export async function createTransactionItem(options: ICreateTransactionOptions):
   const totalQuantity: number = items.reduce((sum: number, item: IOrderItem) => sum + item.quantity, 0);
 
   if (!items.length) {
-    throw new Error('Khong co san pham trong don hang de tao giao dich.');
+    throw new Error('Không có sản phẩm trong đơn hàng để tạo giao dịch.');
   }
 
   await postListItem(options.siteUrl, options.spHttpClient, ORDER_LIST_TITLE, {
@@ -308,7 +345,7 @@ export async function generateUniqueOrderId(siteUrl: string, spHttpClient: SPHtt
     attemptIndex += 1;
   }
 
-  throw new Error('Khong the sinh ma don hang 12 chu so duy nhat.');
+  throw new Error('Không thể sinh mã đơn hàng 12 chữ số duy nhất.');
 }
 
 export async function getTransactionsByUser(
@@ -365,13 +402,13 @@ export async function getTransactionsByUser(
     return {
       orderId,
       orderCode: orderId,
-      buyerName: getStringValue(item, ['EmployeeName'], 'Chua cap nhat'),
+      buyerName: getStringValue(item, ['EmployeeName'], 'Chưa cập nhật'),
       buyerEmail: getStringValue(item, ['EmployeeEmail'], ''),
       purchaseDate: getStringValue(item, ['OrderDate', 'Created'], new Date().toISOString()),
       totalAmount: getNumberValue(item, ['TotalAmount'], 0),
       totalQuantity: getNumberValue(item, ['TotalQuantity'], 0),
-      status: getStringValue(item, ['Status'], 'Chua ban giao'),
-      paymentStatus: getStringValue(item, ['PaymentStatus'], 'Cho xac nhan'),
+      status: getStringValue(item, ['Status'], 'Chưa bàn giao'),
+      paymentStatus: getStringValue(item, ['PaymentStatus'], 'Chờ xác nhận'),
       items: detailMap[orderId] || []
     };
   });
@@ -425,13 +462,13 @@ export async function getAllTransactions(siteUrl: string, spHttpClient: SPHttpCl
     return {
       orderId,
       orderCode: orderId,
-      buyerName: getStringValue(item, ['EmployeeName'], 'Chua cap nhat'),
+      buyerName: getStringValue(item, ['EmployeeName'], 'Chưa cập nhật'),
       buyerEmail: getStringValue(item, ['EmployeeEmail'], ''),
       purchaseDate: getStringValue(item, ['OrderDate', 'Created'], new Date().toISOString()),
       totalAmount: getNumberValue(item, ['TotalAmount'], 0),
       totalQuantity: getNumberValue(item, ['TotalQuantity'], 0),
-      status: getStringValue(item, ['Status'], 'Chua ban giao'),
-      paymentStatus: getStringValue(item, ['PaymentStatus'], 'Cho xac nhan'),
+      status: getStringValue(item, ['Status'], 'Chưa bàn giao'),
+      paymentStatus: getStringValue(item, ['PaymentStatus'], 'Chờ xác nhận'),
       items: detailMap[orderId] || []
     };
   });
@@ -446,7 +483,7 @@ export async function createPaymentHistoryItem(options: ICreatePaymentHistoryOpt
     });
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.warn('Khong ghi duoc day du field lstThanhToan, thu fallback ve Title.', error);
+    console.warn('Không ghi được đầy đủ field lstThanhToan, thử fallback về Title.', error);
 
     await postListItem(options.siteUrl, options.spHttpClient, PAYMENT_HISTORY_LIST_TITLE, {
       Title: options.transferContent
@@ -463,7 +500,7 @@ export async function updateTransactionStatus(options: IUpdateTransactionStatusO
   );
 
   if (!listItem) {
-    throw new Error('Khong tim thay don hang de cap nhat trang thai.');
+    throw new Error('Không tìm thấy đơn hàng để cập nhật trạng thái.');
   }
 
   await updateListItemById(options.siteUrl, options.spHttpClient, ORDER_LIST_TITLE, listItem.Id, {
@@ -480,7 +517,7 @@ export async function updateOrderPaymentStatus(options: IUpdateOrderPaymentStatu
   );
 
   if (!listItem) {
-    throw new Error('Khong tim thay don hang de cap nhat thanh toan.');
+    throw new Error('Không tìm thấy đơn hàng để cập nhật thanh toán.');
   }
 
   await updateListItemById(options.siteUrl, options.spHttpClient, ORDER_LIST_TITLE, listItem.Id, {
@@ -492,10 +529,40 @@ export async function updateAssetStock(options: IUpdateAssetStockOptions): Promi
   const assetItemId: number = Number(options.assetItemId);
 
   if (!assetItemId) {
-    throw new Error('Asset item id khong hop le.');
+    throw new Error('Asset item id không hợp lệ.');
   }
 
   await updateListItemById(options.siteUrl, options.spHttpClient, ASSET_LIST_TITLE, assetItemId, {
     Stock: options.nextStock
   });
+}
+
+export async function rollbackTransactionOrder(options: IRollbackTransactionOrderOptions): Promise<void> {
+  const escapedOrderId: string = escapeODataValue(options.orderId);
+  const orderDetailItems: TSharePointItem[] = await getListItems(
+    options.siteUrl,
+    options.spHttpClient,
+    ORDER_DETAIL_LIST_TITLE,
+    ['Id', 'OrderId'],
+    "OrderId eq '" + escapedOrderId + "'"
+  );
+  const orderHeaders: TSharePointItem[] = await getListItems(
+    options.siteUrl,
+    options.spHttpClient,
+    ORDER_LIST_TITLE,
+    ['Id', 'OrderId'],
+    "OrderId eq '" + escapedOrderId + "'"
+  );
+
+  await Promise.all(
+    orderDetailItems.map((item: TSharePointItem) =>
+      deleteListItemById(options.siteUrl, options.spHttpClient, ORDER_DETAIL_LIST_TITLE, getNumberValue(item, ['Id']))
+    )
+  );
+
+  await Promise.all(
+    orderHeaders.map((item: TSharePointItem) =>
+      deleteListItemById(options.siteUrl, options.spHttpClient, ORDER_LIST_TITLE, getNumberValue(item, ['Id']))
+    )
+  );
 }

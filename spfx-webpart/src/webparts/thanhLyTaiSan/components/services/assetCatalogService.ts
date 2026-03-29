@@ -111,21 +111,21 @@ function buildImageUrl(siteUrl: string, item: TSharePointItem): string {
 function mapItemToAsset(item: TSharePointItem, siteUrl: string): IAssetItem {
   const stock: number = getNumberValue(item, ['Stock'], 0);
   const productCode: string = getStringValue(item, ['ProductCode'], 'N/A');
-  const productName: string = getStringValue(item, ['ProductName'], 'Chua co ten san pham');
+  const productName: string = getStringValue(item, ['ProductName'], 'Chưa có tên sản phẩm');
 
   return {
     id: String(getItemId(item) || productCode || '0'),
     assetCode: productCode,
     assetName: productName,
-    category: getStringValue(item, ['Category'], 'Khac'),
-    condition: getStringValue(item, ['Condition'], 'Chua cap nhat'),
-    site: getStringValue(item, ['Site'], 'Chua cap nhat'),
+    category: getStringValue(item, ['Category'], 'Khác'),
+    condition: getStringValue(item, ['Condition'], 'Chưa cập nhật'),
+    site: getStringValue(item, ['Site'], 'Chưa cập nhật'),
     totalQuantity: stock,
     availableQuantity: stock,
     price: getNumberValue(item, ['Price'], 0),
     imageUrl: buildImageUrl(siteUrl, item),
     barcode: getStringValue(item, ['Barcode'], ''),
-    statusText: stock > 0 ? 'Con hang' : 'Het hang'
+    statusText: stock > 0 ? 'Còn hàng' : 'Hết hàng'
   };
 }
 
@@ -146,7 +146,7 @@ export async function getAssetsFromSharePoint(options: IAssetCatalogServiceOptio
   );
 
   if (!response.ok) {
-    throw new Error('Khong the tai du lieu danh muc tai san tu SharePoint.');
+    throw new Error('Không thể tải dữ liệu danh mục tài sản từ SharePoint.');
   }
 
   const json: { value?: TSharePointItem[] } = (await response.json()) as { value?: TSharePointItem[] };

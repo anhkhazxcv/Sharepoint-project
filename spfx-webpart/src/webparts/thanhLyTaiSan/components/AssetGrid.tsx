@@ -19,8 +19,8 @@ export function AssetGrid(props: IAssetGridProps): React.ReactElement {
   if (!assets.length) {
     return (
       <div className={styles.emptyState}>
-        <strong>Khong tim thay tai san phu hop</strong>
-        <span>Thu thay doi bo loc hoac tu khoa tim kiem de xem them ket qua.</span>
+        <strong>Không tìm thấy tài sản phù hợp</strong>
+        <span>Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm để xem thêm kết quả phù hợp hơn.</span>
       </div>
     );
   }

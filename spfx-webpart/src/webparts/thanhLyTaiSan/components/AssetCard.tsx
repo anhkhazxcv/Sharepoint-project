@@ -20,26 +20,36 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function renderBarcodeBars(barcode: string): React.ReactNode {
-  return barcode.split('').map((char: string, index: number) => {
-    const isWide: boolean = Number(char) % 2 === 0;
+function getStatusVariant(asset: IAssetItem): 'soldOut' | 'lowStock' | 'available' {
+  if (asset.availableQuantity <= 0) {
+    return 'soldOut';
+  }
 
-    return (
-      <span
-        key={`${barcode}-${index}`}
-        className={`${styles.bar} ${isWide ? styles.barWide : styles.barThin}`}
-        aria-hidden="true"
-      />
-    );
-  });
+  if (asset.availableQuantity <= 3) {
+    return 'lowStock';
+  }
+
+  return 'available';
+}
+
+function getStatusLabel(asset: IAssetItem): string {
+  if (asset.availableQuantity <= 0) {
+    return 'Hết hàng';
+  }
+
+  if (asset.availableQuantity <= 3) {
+    return 'Sắp hết';
+  }
+
+  return asset.statusText || 'Còn hàng';
 }
 
 export function AssetCard(props: IAssetCardProps): React.ReactElement {
   const { asset, quantityValue, errorMessage, remainingLimit, isSubmitting, onQuantityChange, onAddToCart } = props;
   const [isImageBroken, setIsImageBroken] = React.useState<boolean>(false);
   const hasImage: boolean = !!asset.imageUrl;
-
-  const isSoldOut: boolean = asset.availableQuantity === 0;
+  const statusVariant: 'soldOut' | 'lowStock' | 'available' = getStatusVariant(asset);
+  const isSoldOut: boolean = statusVariant === 'soldOut';
   const parsedQuantity: number = Number(quantityValue);
   const isWholeNumber: boolean = quantityValue !== '' && String(parsedQuantity) === quantityValue.trim();
   const hasValidQuantity: boolean =
@@ -52,74 +62,67 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
 
   return (
     <article className={`${styles.card} ${isSoldOut ? styles.soldOutCard : ''}`}>
-      <div className={styles.topSection}>
-        <div className={styles.imageWrap}>
-          {!hasImage || isImageBroken ? (
-            <div className={styles.imageFallback}>Khong co anh</div>
-          ) : (
-            <img
-              className={styles.image}
-              src={asset.imageUrl}
-              alt={asset.assetName}
-              onError={() => setIsImageBroken(true)}
-            />
-          )}
+      <div className={styles.mediaArea}>
+        {!hasImage || isImageBroken ? (
+          <div className={styles.imageFallback}>Không có ảnh</div>
+        ) : (
+          <img
+            className={styles.image}
+            src={asset.imageUrl}
+            alt={asset.assetName}
+            onError={() => setIsImageBroken(true)}
+          />
+        )}
+
+        <div
+          className={`${styles.statusBadge} ${
+            statusVariant === 'soldOut' ? styles.statusSoldOut : statusVariant === 'lowStock' ? styles.statusLowStock : styles.statusAvailable
+          }`}
+        >
+          {getStatusLabel(asset)}
+        </div>
+      </div>
+
+      <div className={styles.content}>
+        <div className={styles.metaRow}>
+          <span className={styles.categoryTag}>{asset.category}</span>
+          <span className={styles.locationText}>{asset.site}</span>
         </div>
 
-        <div className={styles.content}>
-          <div className={styles.titleRow}>
-            <span className={`${styles.statusBadge} ${isSoldOut ? styles.statusSoldOut : styles.statusAvailable}`}>
-              {isSoldOut ? 'Het hang' : asset.statusText}
-            </span>
-            <span className={styles.category}>{asset.category}</span>
-          </div>
+        <div className={styles.titleBlock}>
+          <h3 className={styles.title}>{asset.assetName}</h3>
+          <div className={styles.assetCode}>Mã tài sản: {asset.assetCode}</div>
+        </div>
 
-          <div className={styles.summary}>
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Ten TS</span>
-              <strong className={styles.valueTitle}>{asset.assetName}</strong>
-            </div>
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Ma TS</span>
-              <strong className={styles.value}>{asset.assetCode}</strong>
-            </div>
-          </div>
+        <div className={styles.priceBlock}>
+          <span className={styles.priceLabel}>Giá thanh lý</span>
+          <strong className={styles.price}>{formatCurrency(asset.price)}</strong>
+        </div>
 
-          <div className={styles.barcodeBlock}>
-            <div className={styles.barcodeVisual}>{renderBarcodeBars(asset.barcode)}</div>
-            <span className={styles.barcodeText}>{asset.barcode}</span>
+        <div className={styles.infoGrid}>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>Tình trạng</span>
+            <strong className={styles.infoValue}>{asset.condition}</strong>
           </div>
-
-          <div className={styles.metaGrid}>
-            <div className={styles.metaItem}>
-              <span className={styles.label}>So luong tong</span>
-              <strong className={styles.value}>{asset.totalQuantity}</strong>
-            </div>
-            <div className={styles.metaItem}>
-              <span className={styles.label}>Tinh trang TS</span>
-              <strong className={styles.value}>{asset.condition}</strong>
-            </div>
-            <div className={styles.metaItem}>
-              <span className={styles.label}>Site</span>
-              <strong className={styles.value}>{asset.site}</strong>
-            </div>
-            <div className={styles.metaItem}>
-              <span className={styles.label}>So luong ton</span>
-              <strong className={styles.value}>{asset.availableQuantity}</strong>
-            </div>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>Tồn kho</span>
+            <strong className={styles.infoValue}>{asset.availableQuantity}</strong>
+          </div>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>Tổng số lượng</span>
+            <strong className={styles.infoValue}>{asset.totalQuantity}</strong>
+          </div>
+          <div className={styles.infoItem}>
+            <span className={styles.infoLabel}>Barcode</span>
+            <strong className={styles.infoValue}>{asset.barcode || 'Chưa có'}</strong>
           </div>
         </div>
       </div>
 
       <div className={styles.footer}>
-        <div className={styles.priceBlock}>
-          <span className={styles.label}>Gia ban</span>
-          <strong className={styles.price}>{formatCurrency(asset.price)}</strong>
-        </div>
-
-        <div className={styles.purchaseRow}>
+        <div className={styles.purchasePanel}>
           <label className={styles.quantityField} htmlFor={`quantity-${asset.id}`}>
-            <span className={styles.label}>So luong mua</span>
+            <span className={styles.infoLabel}>Số lượng đăng ký</span>
             <input
               id={`quantity-${asset.id}`}
               className={`${styles.quantityInput} ${errorMessage ? styles.quantityError : ''}`}
@@ -135,20 +138,20 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
 
           <button
             type="button"
-            className={`${styles.actionButton} ${isSoldOut ? styles.actionDisabled : styles.actionActive}`}
+            className={`${styles.actionButton} ${isActionDisabled ? styles.actionDisabled : styles.actionActive}`}
             disabled={isActionDisabled}
             onClick={() => onAddToCart(asset)}
           >
-            {isSoldOut ? 'Het hang' : isSubmitting ? 'Dang them...' : 'Them vao gio'}
+            {isSoldOut ? 'Hết hàng' : isSubmitting ? 'Đang thêm...' : 'Đăng ký mua'}
           </button>
         </div>
 
         {remainingLimit === 0 && !isSoldOut ? (
-          <span className={styles.helperText}>Da dat gioi han mua toi da.</span>
+          <span className={styles.helperText}>Bạn đã đạt giới hạn mua tối đa.</span>
         ) : errorMessage ? (
           <span className={styles.errorText}>{errorMessage}</span>
         ) : (
-          <span className={styles.helperText}>Nhap toi da {Math.min(asset.availableQuantity, remainingLimit)} tai san.</span>
+          <span className={styles.helperText}>Có thể nhập tối đa {Math.min(asset.availableQuantity, remainingLimit)} sản phẩm cho mặt hàng này.</span>
         )}
       </div>
     </article>

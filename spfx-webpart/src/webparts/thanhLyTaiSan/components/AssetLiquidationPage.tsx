@@ -18,19 +18,21 @@ export interface IAssetLiquidationPageProps {
   onPurchaseSuccess?: (orderDetail: IOrderDetail) => void;
 }
 
+type TSortOption = 'latest' | 'priceAsc' | 'priceDesc' | 'stockDesc' | 'nameAsc';
+
 const defaultFilters: IAssetFilters = {
   category: '',
   condition: '',
   site: ''
 };
 
-const PAGE_SIZE_OPTIONS: number[] = [10, 20, 50];
+const PAGE_SIZE_OPTIONS: number[] = [12, 24, 48];
 const SHAREPOINT_LIST_TITLE: string = 'lstSanPham';
 const PURCHASE_LIMIT: number = 5;
 const MAX_SHAREPOINT_RETRIES: number = 5;
 
-function stripVietnamese(input: string): string {
-  return input
+function normalizeKeyword(value: string): string {
+  return value
     .replace(/[àáạảãâầấậẩẫăằắặẳẵ]/g, 'a')
     .replace(/[ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴ]/g, 'A')
     .replace(/[èéẹẻẽêềếệểễ]/g, 'e')
@@ -44,25 +46,16 @@ function stripVietnamese(input: string): string {
     .replace(/[ỳýỵỷỹ]/g, 'y')
     .replace(/[ỲÝỴỶỸ]/g, 'Y')
     .replace(/[đ]/g, 'd')
-    .replace(/[Đ]/g, 'D');
-}
-
-function normalizeKeyword(value: string): string {
-  return stripVietnamese(value.trim().toLowerCase());
+    .replace(/[Đ]/g, 'D')
+    .trim()
+    .toLowerCase();
 }
 
 function getUniqueValues(items: IAssetItem[], key: keyof IAssetItem): string[] {
-  const results: string[] = [];
-
-  items.forEach((item: IAssetItem) => {
-    const value: string = String(item[key]);
-
-    if (value && results.indexOf(value) === -1) {
-      results.push(value);
-    }
-  });
-
-  return results;
+  return items
+    .map((item: IAssetItem) => String(item[key] || '').trim())
+    .filter((value: string, index: number, values: string[]) => !!value && values.indexOf(value) === index)
+    .sort((left: string, right: string) => left.localeCompare(right, 'vi'));
 }
 
 function formatCartItems(
@@ -95,11 +88,60 @@ function formatCartItems(
     .filter((item): item is ICartItem => !!item);
 }
 
+function getSortLabel(sortValue: TSortOption): string {
+  switch (sortValue) {
+    case 'priceAsc':
+      return 'Giá thấp đến cao';
+    case 'priceDesc':
+      return 'Giá cao đến thấp';
+    case 'stockDesc':
+      return 'Còn nhiều hàng';
+    case 'nameAsc':
+      return 'Tên A-Z';
+    case 'latest':
+    default:
+      return 'Mới nhất';
+  }
+}
+
+function getActiveFilterChips(filters: IAssetFilters, searchValue: string, sortValue: TSortOption): string[] {
+  const chips: string[] = [];
+
+  if (filters.category) {
+    chips.push('Loại: ' + filters.category);
+  }
+
+  if (filters.condition) {
+    chips.push('Tình trạng: ' + filters.condition);
+  }
+
+  if (filters.site) {
+    chips.push('Địa điểm: ' + filters.site);
+  }
+
+  if (searchValue.trim()) {
+    chips.push('Từ khóa: ' + searchValue.trim());
+  }
+
+  if (sortValue !== 'latest') {
+    chips.push('Sắp xếp: ' + getSortLabel(sortValue));
+  }
+
+  return chips;
+}
+
 export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.ReactElement {
-  const displayName: string = props.userDisplayName || '';
+  const displayName: string = props.userDisplayName || 'Người dùng nội bộ';
+
+  React.useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log('User email đang đăng nhập:', props.userEmail);
+  }, [props.userEmail]);
+
   const [assets, setAssets] = React.useState<IAssetItem[]>([]);
   const [filters, setFilters] = React.useState<IAssetFilters>(defaultFilters);
   const [searchValue, setSearchValue] = React.useState<string>('');
+  const [sortValue, setSortValue] = React.useState<TSortOption>('latest');
   const [quantityInputs, setQuantityInputs] = React.useState<Record<string, string>>({});
   const [quantityErrors, setQuantityErrors] = React.useState<Record<string, string>>({});
   const [currentPage, setCurrentPage] = React.useState<number>(1);
@@ -117,6 +159,14 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
   const cartQuantity: number = React.useMemo(
     () => cartItems.reduce((sum: number, item: ICartItem) => sum + item.quantity, 0),
     [cartItems]
+  );
+  const availableAssetCount: number = React.useMemo(
+    () => assets.filter((asset: IAssetItem) => asset.availableQuantity > 0).length,
+    [assets]
+  );
+  const lowStockCount: number = React.useMemo(
+    () => assets.filter((asset: IAssetItem) => asset.availableQuantity > 0 && asset.availableQuantity <= 3).length,
+    [assets]
   );
 
   const loadCartItems = React.useCallback(
@@ -150,20 +200,17 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
           }
 
           setAssets(items);
+
           if (props.onAssetsLoaded) {
             props.onAssetsLoaded(items);
           }
 
           return loadCartItems(items)
-            .then(() => {
-              if (isMounted) {
-                setIsLoadingAssets(false);
-              }
-            })
             .catch((cartError: Error) => {
               // eslint-disable-next-line no-console
-              console.error('Khong the tai gio hang tu SharePoint', cartError);
-
+              console.error('Không thể tải giỏ hàng từ SharePoint', cartError);
+            })
+            .then(() => {
               if (isMounted) {
                 setIsLoadingAssets(false);
               }
@@ -183,10 +230,12 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
           }
 
           setAssets([]);
-          setAssetLoadError('Khong tai duoc du lieu SharePoint sau 5 lan. Vui long lien he doi IT Support.');
+          setAssetLoadError('Không tải được dữ liệu SharePoint sau 5 lần thử. Vui lòng liên hệ đội IT Support.');
+
           if (props.onAssetsLoaded) {
             props.onAssetsLoaded([]);
           }
+
           setIsLoadingAssets(false);
         });
     }
@@ -201,19 +250,36 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
   const visibleAssets: IAssetItem[] = React.useMemo(() => {
     const keyword: string = normalizeKeyword(searchValue);
 
-    return assets.filter((asset: IAssetItem) => {
-      const matchesCategory: boolean = !filters.category || asset.category === filters.category;
-      const matchesCondition: boolean = !filters.condition || asset.condition === filters.condition;
-      const matchesSite: boolean = !filters.site || asset.site === filters.site;
-      const matchesSearch: boolean =
-        !keyword ||
-        normalizeKeyword(asset.assetCode).indexOf(keyword) >= 0 ||
-        normalizeKeyword(asset.assetName).indexOf(keyword) >= 0 ||
-        normalizeKeyword(asset.barcode).indexOf(keyword) >= 0;
+    return assets
+      .filter((asset: IAssetItem) => {
+        const matchesCategory: boolean = !filters.category || asset.category === filters.category;
+        const matchesCondition: boolean = !filters.condition || asset.condition === filters.condition;
+        const matchesSite: boolean = !filters.site || asset.site === filters.site;
+        const matchesSearch: boolean =
+          !keyword ||
+          normalizeKeyword(asset.assetCode).indexOf(keyword) >= 0 ||
+          normalizeKeyword(asset.assetName).indexOf(keyword) >= 0 ||
+          normalizeKeyword(asset.barcode).indexOf(keyword) >= 0;
 
-      return matchesCategory && matchesCondition && matchesSite && matchesSearch;
-    });
-  }, [assets, filters, searchValue]);
+        return matchesCategory && matchesCondition && matchesSite && matchesSearch;
+      })
+      .slice()
+      .sort((left: IAssetItem, right: IAssetItem) => {
+        switch (sortValue) {
+          case 'priceAsc':
+            return left.price - right.price;
+          case 'priceDesc':
+            return right.price - left.price;
+          case 'stockDesc':
+            return right.availableQuantity - left.availableQuantity;
+          case 'nameAsc':
+            return left.assetName.localeCompare(right.assetName, 'vi');
+          case 'latest':
+          default:
+            return right.id.localeCompare(left.id);
+        }
+      });
+  }, [assets, filters, searchValue, sortValue]);
 
   const totalPages: number = Math.max(Math.ceil(visibleAssets.length / pageSize), 1);
   const paginatedAssets: IAssetItem[] = React.useMemo(() => {
@@ -221,9 +287,14 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
     return visibleAssets.slice(startIndex, startIndex + pageSize);
   }, [currentPage, pageSize, visibleAssets]);
 
+  const activeFilterChips: string[] = React.useMemo(
+    () => getActiveFilterChips(filters, searchValue, sortValue),
+    [filters, searchValue, sortValue]
+  );
+
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [filters, searchValue, pageSize]);
+  }, [filters, searchValue, sortValue, pageSize]);
 
   React.useEffect(() => {
     if (currentPage > totalPages) {
@@ -254,7 +325,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
       const parsedValue: number = Number(nextValue);
 
       if (parsedValue === 0) {
-        errorMessage = 'So luong mua phai lon hon 0.';
+        errorMessage = 'Số lượng mua phải lớn hơn 0.';
       }
 
       if (parsedValue > asset.availableQuantity) {
@@ -263,10 +334,11 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
 
       if (Number(nextValue) > maxAllowedForAsset) {
         nextValue = String(maxAllowedForAsset);
+        errorMessage = 'Bạn đã đăng ký vượt quá giới hạn mua còn lại.';
       }
 
       if (Number(nextValue) <= 0) {
-        errorMessage = 'Ban da dat gioi han mua toi da.';
+        errorMessage = 'Bạn đã đạt giới hạn mua tối đa.';
       }
 
       setQuantityInputs((prevState) => ({
@@ -301,6 +373,12 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
     }));
   }, []);
 
+  const handleClearAllFilters = React.useCallback(() => {
+    setFilters(defaultFilters);
+    setSearchValue('');
+    setSortValue('latest');
+  }, []);
+
   const setAssetSubmittingState = React.useCallback((assetId: string, isSubmitting: boolean) => {
     setSubmittingAssetIds((prevState) => ({
       ...prevState,
@@ -312,12 +390,24 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
     (asset: IAssetItem) => {
       const quantity: number = Number(quantityInputs[asset.id] || '0');
       const hasError: boolean = !!quantityErrors[asset.id];
+      const currentCartItem: ICartItem | undefined = cartItems.filter((item: ICartItem) => item.productCode === asset.assetCode)[0];
+      const quantityOutsideCurrentItem: number = cartQuantity - (currentCartItem ? currentCartItem.quantity : 0);
+      const nextCartQuantity: number = quantityOutsideCurrentItem + quantity;
 
       if (!quantity || quantity <= 0 || quantity > asset.availableQuantity || hasError) {
         setQuantityErrors((prevState) => ({
           ...prevState,
-          [asset.id]: 'Vui long nhap so luong hop le.'
+          [asset.id]: 'Vui lòng nhập số lượng hợp lệ.'
         }));
+        return;
+      }
+
+      if (nextCartQuantity > remainingLimit) {
+        setQuantityErrors((prevState) => ({
+          ...prevState,
+          [asset.id]: 'Tổng số lượng đăng ký đã vượt quá giới hạn còn lại.'
+        }));
+        window.alert('Bạn đã đăng ký vượt quá giới hạn mua. Vui lòng giảm số lượng.');
         return;
       }
 
@@ -345,8 +435,8 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
         })
         .catch((error: Error) => {
           // eslint-disable-next-line no-console
-          console.error('Khong the them vao gio hang', error);
-          window.alert('Khong the them san pham vao gio hang tren SharePoint.');
+          console.error('Không thể thêm vào giỏ hàng', error);
+          window.alert('Không thể thêm sản phẩm vào giỏ hàng trên SharePoint.');
         })
         .then(
           () => {
@@ -357,36 +447,71 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
           }
         );
     },
-    [assets, displayName, loadCartItems, props.siteUrl, props.spHttpClient, props.userEmail, quantityErrors, quantityInputs, setAssetSubmittingState]
+    [
+      assets,
+      cartItems,
+      cartQuantity,
+      displayName,
+      loadCartItems,
+      props.siteUrl,
+      props.spHttpClient,
+      props.userEmail,
+      quantityErrors,
+      quantityInputs,
+      remainingLimit,
+      setAssetSubmittingState
+    ]
   );
 
   return (
     <div className={styles.page}>
-      <header className={styles.mainHeader}>
-        <div className={styles.headerCenter}>
-          <div className={styles.headerSubTitle}>He thong quan ly tai san noi bo</div>
-          <h1 className={styles.pageTitle}>Giao dien Dang ky Mua Tai san (CBNV)</h1>
+      <section className={styles.hero}>
+        <div className={styles.heroContent}>
+          <div className={styles.heroEyebrow}>Nền tảng thanh lý tài sản nội bộ</div>
+          <h1 className={styles.pageTitle}>Đăng ký mua tài sản dành cho cán bộ nhân viên</h1>
+          <p className={styles.heroDescription}>
+            Tìm kiếm tài sản phù hợp, theo dõi trạng thái tồn kho theo thời gian thực và tạo yêu cầu mua nhanh trong cùng một giao diện.
+          </p>
+
+          <div className={styles.heroActions}>
+            <span className={styles.primaryChip}>Đang mở bán: {availableAssetCount} tài sản</span>
+            <span className={styles.secondaryChip}>Giỏ hàng hiện có: {cartQuantity} sản phẩm</span>
+          </div>
         </div>
 
         <div className={styles.userPanel}>
-          <div className={styles.userText}>Can bo nhan vien: {displayName}</div>
-          <div className={styles.avatar} aria-hidden="true">
-            {displayName.charAt(0).toUpperCase()}
+          <div className={styles.userPanelLabel}>Tài khoản đang thao tác</div>
+          <div className={styles.userIdentity}>
+            <div className={styles.avatar} aria-hidden="true">
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className={styles.userName}>{displayName}</div>
+              <div className={styles.userEmail}>{props.userEmail}</div>
+            </div>
           </div>
         </div>
-      </header>
+      </section>
 
-      <div className={styles.subHeader}>
-        <div>
-          <strong className={styles.subHeaderTitle}>Danh sach tai san thanh ly</strong>
-          <span className={styles.subHeaderText}>CBNV co the tim kiem, them vao gio hang va tao don mua nhieu san pham.</span>
-          <span className={styles.subHeaderText}>
-            Nguon du lieu: {props.siteUrl} / {SHAREPOINT_LIST_TITLE}
-          </span>
-          {!!assetLoadError && <span className={styles.loadError}>{assetLoadError}</span>}
-        </div>
-        <div className={styles.summaryChip}>Tong tai san hien thi: {visibleAssets.length}</div>
-      </div>
+      <section className={styles.statsGrid}>
+        <article className={styles.statCard}>
+          <span className={styles.statLabel}>Tài sản đang hiển thị</span>
+          <strong className={styles.statValue}>{visibleAssets.length}</strong>
+          <span className={styles.statMeta}>Tổng nguồn dữ liệu hiện có {assets.length} tài sản</span>
+        </article>
+
+        <article className={styles.statCard}>
+          <span className={styles.statLabel}>Giới hạn còn lại</span>
+          <strong className={styles.statValue}>{remainingLimit}</strong>
+          <span className={styles.statMeta}>Đã mua {props.purchasedCount}/{PURCHASE_LIMIT} tài sản</span>
+        </article>
+
+        <article className={styles.statCard}>
+          <span className={styles.statLabel}>Sắp hết hàng</span>
+          <strong className={styles.statValue}>{lowStockCount}</strong>
+          <span className={styles.statMeta}>Những sản phẩm còn tối đa 3 đơn vị</span>
+        </article>
+      </section>
 
       <FilterBar
         filters={filters}
@@ -396,13 +521,32 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
         searchValue={searchValue}
         purchasedCount={props.purchasedCount}
         maxLimit={PURCHASE_LIMIT}
+        resultCount={visibleAssets.length}
+        totalCount={assets.length}
+        sortValue={sortValue}
+        activeFilterChips={activeFilterChips}
         onFilterChange={handleFilterChange}
         onSearchChange={setSearchValue}
+        onSortChange={(value: string) => setSortValue(value as TSortOption)}
+        onClearFilters={handleClearAllFilters}
       />
 
-      <div className={styles.contentArea}>
+      <section className={styles.contentArea}>
+        <div className={styles.sectionHeader}>
+          <div>
+            <h2 className={styles.sectionTitle}>Danh sách tài sản</h2>
+            <p className={styles.sectionText}>Ưu tiên ảnh, giá bán, tình trạng và số lượng tồn để giúp người dùng ra quyết định nhanh.</p>
+          </div>
+
+          <div className={styles.sectionHeaderMeta}>
+            <span className={styles.resultPill}>Sắp xếp: {getSortLabel(sortValue)}</span>
+          </div>
+        </div>
+
         {isLoadingAssets ? (
-          <div className={styles.loadingState}>Dang tai du lieu tu SharePoint...</div>
+          <div className={styles.loadingState}>Đang tải dữ liệu từ SharePoint...</div>
+        ) : assetLoadError ? (
+          <div className={styles.loadingState}>{assetLoadError}</div>
         ) : (
           <AssetGrid
             assets={paginatedAssets}
@@ -418,12 +562,12 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
         {!isLoadingAssets && !!visibleAssets.length && (
           <div className={styles.paginationBar}>
             <div className={styles.paginationSummary}>
-              Hien thi {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, visibleAssets.length)} / {visibleAssets.length} tai san
+              Hiển thị {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, visibleAssets.length)} / {visibleAssets.length} tài sản
             </div>
 
             <div className={styles.paginationControls}>
               <label className={styles.pageSizeControl}>
-                <span>So dong</span>
+                <span>Mỗi trang</span>
                 <select
                   value={pageSize}
                   onChange={(event) => setPageSize(Number(event.target.value))}
@@ -444,7 +588,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
                   onClick={() => setCurrentPage((prevState) => Math.max(prevState - 1, 1))}
                   disabled={currentPage === 1}
                 >
-                  Truoc
+                  Trước
                 </button>
                 <span className={styles.pageIndicator}>
                   Trang {currentPage}/{totalPages}
@@ -461,7 +605,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
             </div>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

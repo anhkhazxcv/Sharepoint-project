@@ -17,7 +17,7 @@ export interface IThanhLyTaiSanWebPartProps {
   siteUrl: string;
 }
 
-const DEFAULT_SITE_URL: string = 'https://masterisegroup.sharepoint.com/sites/ThanhLyTaiSan';
+const DEFAULT_SITE_URL: string = 'https://masterisegroup.sharepoint.com/sites/ThanhLyTaiSanPROD';
 
 export default class ThanhLyTaiSanWebPart extends BaseClientSideWebPart<IThanhLyTaiSanWebPartProps> {
 
@@ -122,7 +122,7 @@ export default class ThanhLyTaiSanWebPart extends BaseClientSideWebPart<IThanhLy
                   label: strings.DescriptionFieldLabel
                 }),
                 PropertyPaneTextField('siteUrl', {
-                  label: 'SharePoint Site URL'
+                  label: 'SharePointSiteURL'
                 })
               ]
             }
