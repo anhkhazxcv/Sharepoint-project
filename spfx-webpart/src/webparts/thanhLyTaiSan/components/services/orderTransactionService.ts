@@ -358,7 +358,7 @@ export async function getTransactionsByUser(
     siteUrl,
     spHttpClient,
     ORDER_LIST_TITLE,
-    ['OrderId', 'EmployeeName', 'EmployeeEmail', 'OrderDate', 'TotalQuantity', 'TotalAmount', 'Status', 'PaymentStatus', 'Id'],
+    ['OrderId', 'EmployeeName', 'EmployeeEmail', 'OrderDate', 'Created', 'TotalQuantity', 'TotalAmount', 'Status', 'PaymentStatus', 'Id'],
     "EmployeeEmail eq '" + escapedEmail + "'"
   );
 
@@ -419,7 +419,7 @@ export async function getAllTransactions(siteUrl: string, spHttpClient: SPHttpCl
     siteUrl,
     spHttpClient,
     ORDER_LIST_TITLE,
-    ['OrderId', 'EmployeeName', 'EmployeeEmail', 'OrderDate', 'TotalQuantity', 'TotalAmount', 'Status', 'PaymentStatus', 'Id']
+    ['OrderId', 'EmployeeName', 'EmployeeEmail', 'OrderDate', 'Created', 'TotalQuantity', 'TotalAmount', 'Status', 'PaymentStatus', 'Id']
   );
 
   if (!orderHeaders.length) {

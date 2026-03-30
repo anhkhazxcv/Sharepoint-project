@@ -414,6 +414,10 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
   }
 
   function handleConfirmPayment(orderId: string): void {
+    if (!hasAdminRole) {
+      return;
+    }
+
     const targetOrder: IOrderDetail | null = getOrderById(orderId);
 
     if (!targetOrder || !targetOrder.items.length) {
@@ -446,10 +450,20 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
   }
 
   function handleConfirmHandover(orderId: string): void {
+    if (!hasAdminRole) {
+      return;
+    }
+
+    const targetOrder: IOrderDetail | null = getOrderById(orderId);
+
+    if (!targetOrder) {
+      return;
+    }
+
     updateTransactionStatus({
       siteUrl: props.siteUrl,
       spHttpClient: props.spHttpClient,
-      orderId,
+      orderId: targetOrder.orderCode,
       status: 'Đã bàn giao'
     })
       .then((): void => {

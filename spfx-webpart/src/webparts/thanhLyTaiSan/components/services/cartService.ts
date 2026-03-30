@@ -227,6 +227,27 @@ async function ensureCartHeader(
   return cartId;
 }
 
+async function getCartIdByBuyerEmail(
+  siteUrl: string,
+  spHttpClient: SPHttpClient,
+  buyerEmail: string
+): Promise<string | undefined> {
+  const escapedEmail: string = escapeODataValue(buyerEmail);
+  const cartHeaders: TSharePointItem[] = await getListItems(
+    siteUrl,
+    spHttpClient,
+    CART_LIST_TITLE,
+    ['CartId', 'EmployeeEmail'],
+    "EmployeeEmail eq '" + escapedEmail + "'"
+  );
+
+  if (!cartHeaders.length) {
+    return undefined;
+  }
+
+  return getStringValue(cartHeaders[0], ['CartId']);
+}
+
 export async function getCartItemsByUser(
   siteUrl: string,
   spHttpClient: SPHttpClient,
@@ -301,7 +322,12 @@ export async function removeCartItem(options: {
   buyerEmail: string;
   productCode: string;
 }): Promise<void> {
-  const cartId: string = createCartId(options.buyerEmail);
+  const cartId: string | undefined = await getCartIdByBuyerEmail(options.siteUrl, options.spHttpClient, options.buyerEmail);
+
+  if (!cartId) {
+    return;
+  }
+
   const existingItem = await getListItemByFilter(
     options.siteUrl,
     options.spHttpClient,

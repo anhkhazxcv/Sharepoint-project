@@ -4,11 +4,12 @@ import styles from './SearchBox.module.scss';
 export interface ISearchBoxProps {
   value: string;
   placeholder: string;
+  ariaLabel?: string;
   onChange: (value: string) => void;
 }
 
 export function SearchBox(props: ISearchBoxProps): React.ReactElement {
-  const { value, placeholder, onChange } = props;
+  const { value, placeholder, ariaLabel, onChange } = props;
 
   return (
     <label className={styles.searchBox}>
@@ -25,6 +26,7 @@ export function SearchBox(props: ISearchBoxProps): React.ReactElement {
         type="search"
         value={value}
         placeholder={placeholder}
+        aria-label={ariaLabel || placeholder}
         onChange={(event: React.ChangeEvent<HTMLInputElement>) => onChange(event.target.value)}
       />
     </label>

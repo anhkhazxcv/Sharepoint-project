@@ -104,7 +104,12 @@ export function FilterBar(props: IFilterBarProps): React.ReactElement {
       </div>
 
       <div className={styles.searchRow}>
-        <SearchBox value={searchValue} placeholder="Tìm theo tên tài sản, mã tài sản, barcode..." onChange={onSearchChange} />
+        <SearchBox
+          value={searchValue}
+          placeholder="Tìm theo tên tài sản, mã tài sản, barcode..."
+          ariaLabel="Tìm kiếm tài sản"
+          onChange={onSearchChange}
+        />
       </div>
 
       <div className={styles.filterGrid}>
