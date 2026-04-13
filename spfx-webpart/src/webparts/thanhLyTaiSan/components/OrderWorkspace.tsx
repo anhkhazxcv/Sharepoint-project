@@ -2,6 +2,8 @@ import * as React from 'react';
 import type { SPHttpClient } from '@microsoft/sp-http';
 import { AssetLiquidationPage } from './AssetLiquidationPage';
 import { CartPage } from './CartPage';
+import { FullscreenLoadingOverlay } from './FullscreenLoadingOverlay';
+import { useToast } from './ToastProvider';
 import { AdminTransactionPage } from './orderDetail/AdminTransactionPage';
 import { OrderDetailPage } from './orderDetail/OrderDetailPage';
 import { OrderListPage } from './orderDetail/OrderListPage';
@@ -9,11 +11,14 @@ import logoMag from '../assets/logoMAG.png';
 import techcombankLogo from '../assets/techcombank-1.png';
 import type { IOrderDetail, IOrderItem } from './orderDetail/types';
 import type { IAssetItem } from './types';
+import { getAssetsFromSharePoint } from './services/assetCatalogService';
 import {
   getAllTransactions,
   getTransactionsByUser,
+  rollbackTransactionOrder,
   type IUserTransactionLineRecord,
   type IUserTransactionRecord,
+  updateAssetStock,
   updateOrderPaymentStatus,
   updateTransactionStatus
 } from './services/orderTransactionService';
@@ -29,6 +34,14 @@ export interface IOrderWorkspaceProps {
 }
 
 type TWorkspaceTab = 'register' | 'cart' | 'orders' | 'admin';
+const SHAREPOINT_LIST_TITLE: string = 'lstSanPham';
+
+interface IPreparedRestoreStockUpdate {
+  assetCode: string;
+  assetItemId: string;
+  previousStock: number;
+  nextStock: number;
+}
 
 function createAssetPlaceholder(label: string): string {
   const svg: string =
@@ -252,7 +265,47 @@ function mapOrderDetailToTransactionRecord(orderDetail: IOrderDetail, userEmail:
   };
 }
 
+async function applyRestoreStockUpdatesWithRollback(
+  siteUrl: string,
+  spHttpClient: SPHttpClient,
+  stockUpdates: IPreparedRestoreStockUpdate[]
+): Promise<void> {
+  const appliedUpdates: IPreparedRestoreStockUpdate[] = [];
+
+  try {
+    for (let index: number = 0; index < stockUpdates.length; index += 1) {
+      const stockUpdate: IPreparedRestoreStockUpdate = stockUpdates[index];
+
+      await updateAssetStock({
+        siteUrl,
+        spHttpClient,
+        assetItemId: stockUpdate.assetItemId,
+        nextStock: stockUpdate.nextStock
+      });
+
+      appliedUpdates.push(stockUpdate);
+    }
+  } catch (error) {
+    await Promise.all(
+      appliedUpdates.map((stockUpdate: IPreparedRestoreStockUpdate) =>
+        updateAssetStock({
+          siteUrl,
+          spHttpClient,
+          assetItemId: stockUpdate.assetItemId,
+          nextStock: stockUpdate.previousStock
+        }).catch((rollbackError: Error) => {
+          // eslint-disable-next-line no-console
+          console.error('Không thể hoàn tác tồn kho khi xóa giao dịch', stockUpdate.assetCode, rollbackError);
+        })
+      )
+    );
+
+    throw error;
+  }
+}
+
 export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = React.useState<TWorkspaceTab>('register');
   const [transactionRecords, setTransactionRecords] = React.useState<IUserTransactionRecord[]>([]);
   const [adminTransactionRecords, setAdminTransactionRecords] = React.useState<IUserTransactionRecord[]>([]);
@@ -261,8 +314,20 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
   const [bankInfo, setBankInfo] = React.useState<IBankInfoRecord | undefined>(undefined);
   const [hasAdminRole, setHasAdminRole] = React.useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState<boolean>(false);
+  const [pendingApiCount, setPendingApiCount] = React.useState<number>(0);
+  const [loadingLabel, setLoadingLabel] = React.useState<string>('Đang tải dữ liệu...');
+
+  const beginLoading = React.useCallback((label: string): void => {
+    setLoadingLabel(label);
+    setPendingApiCount((prevState: number) => prevState + 1);
+  }, []);
+
+  const endLoading = React.useCallback((): void => {
+    setPendingApiCount((prevState: number) => Math.max(prevState - 1, 0));
+  }, []);
 
   React.useEffect(() => {
+    beginLoading('Đang tải lịch sử giao dịch...');
     getTransactionsByUser(props.siteUrl, props.spHttpClient, props.userEmail)
       .then((records: IUserTransactionRecord[]): void => {
         setTransactionRecords(records);
@@ -270,10 +335,17 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console
         console.error('Không thể tải lịch sử giao dịch của người dùng', error);
+      })
+      .then((): void => {
+        endLoading();
+      })
+      .catch((): void => {
+        return;
       });
-  }, [props.siteUrl, props.spHttpClient, props.userEmail]);
+  }, [beginLoading, endLoading, props.siteUrl, props.spHttpClient, props.userEmail]);
 
   React.useEffect(() => {
+    beginLoading('Đang kiểm tra quyền truy cập...');
     isUserAdmin(props.siteUrl, props.spHttpClient, props.userEmail)
       .then((result: boolean): void => {
         setHasAdminRole(result);
@@ -282,8 +354,14 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
         // eslint-disable-next-line no-console
         console.error('Không thể kiểm tra quyền admin', error);
         setHasAdminRole(false);
+      })
+      .then((): void => {
+        endLoading();
+      })
+      .catch((): void => {
+        return;
       });
-  }, [props.siteUrl, props.spHttpClient, props.userEmail]);
+  }, [beginLoading, endLoading, props.siteUrl, props.spHttpClient, props.userEmail]);
 
   React.useEffect(() => {
     if (!hasAdminRole) {
@@ -291,6 +369,7 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       return;
     }
 
+    beginLoading('Đang tải danh sách giao dịch quản trị...');
     getAllTransactions(props.siteUrl, props.spHttpClient)
       .then((records: IUserTransactionRecord[]): void => {
         setAdminTransactionRecords(records);
@@ -298,10 +377,17 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console
         console.error('Không thể tải danh sách giao dịch admin', error);
+      })
+      .then((): void => {
+        endLoading();
+      })
+      .catch((): void => {
+        return;
       });
-  }, [hasAdminRole, props.siteUrl, props.spHttpClient]);
+  }, [beginLoading, endLoading, hasAdminRole, props.siteUrl, props.spHttpClient]);
 
   React.useEffect(() => {
+    beginLoading('Đang tải thông tin ngân hàng...');
     getBankInfoFromSharePoint(props.siteUrl, props.spHttpClient)
       .then((record: IBankInfoRecord | undefined): void => {
         setBankInfo(record);
@@ -309,8 +395,14 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console
         console.error('Không thể tải thông tin ngân hàng', error);
+      })
+      .then((): void => {
+        endLoading();
+      })
+      .catch((): void => {
+        return;
       });
-  }, [props.siteUrl, props.spHttpClient]);
+  }, [beginLoading, endLoading, props.siteUrl, props.spHttpClient]);
 
   React.useEffect(() => {
     if (!hasAdminRole && activeTab === 'admin') {
@@ -351,6 +443,221 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
     });
     setSelectedOrderId(orderDetail.orderId);
     setActiveTab('orders');
+  }
+
+  function removeOrderFromState(orderId: string): void {
+    setTransactionRecords((prevRecords: IUserTransactionRecord[]): IUserTransactionRecord[] =>
+      prevRecords.filter((record: IUserTransactionRecord) => record.orderId !== orderId)
+    );
+    setAdminTransactionRecords((prevRecords: IUserTransactionRecord[]): IUserTransactionRecord[] =>
+      prevRecords.filter((record: IUserTransactionRecord) => record.orderId !== orderId)
+    );
+
+    if (selectedOrderId === orderId) {
+      setSelectedOrderId(null);
+      setActiveTab('admin');
+    }
+  }
+
+  function handleDeleteOrderSafe(orderDetail: IOrderDetail): void {
+    if (!hasAdminRole) {
+      return;
+    }
+
+    if (orderDetail.paymentStatus === 'Đã thanh toán' || orderDetail.handoverStatus === 'Đã bàn giao') {
+      showToast('Chỉ được xóa giao dịch chưa thanh toán và chưa bàn giao.', 'error');
+      return;
+    }
+
+    const shouldDelete: boolean = window.confirm(
+      'Xóa giao dịch ' + orderDetail.orderCode + '? Hệ thống sẽ hoàn lại tồn kho cho các sản phẩm trong đơn này.'
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    beginLoading('Đang xóa giao dịch...');
+
+    getAssetsFromSharePoint({
+      siteUrl: props.siteUrl,
+      listTitle: SHAREPOINT_LIST_TITLE,
+      spHttpClient: props.spHttpClient
+    })
+      .then((latestAssets: IAssetItem[]) => {
+        const restoreQuantityByAssetCode: Record<string, number> = {};
+
+        orderDetail.items.forEach((item: IOrderItem) => {
+          restoreQuantityByAssetCode[item.assetCode] = (restoreQuantityByAssetCode[item.assetCode] || 0) + item.quantity;
+        });
+
+        const stockUpdates: IPreparedRestoreStockUpdate[] = Object.keys(restoreQuantityByAssetCode).map((assetCode: string) => {
+          const latestAsset: IAssetItem | undefined = latestAssets.filter((asset: IAssetItem) => asset.assetCode === assetCode)[0];
+
+          if (!latestAsset) {
+            throw new Error('Không tìm thấy sản phẩm ' + assetCode + ' để hoàn tồn kho.');
+          }
+
+          return {
+            assetCode,
+            assetItemId: latestAsset.id,
+            previousStock: latestAsset.availableQuantity,
+            nextStock: latestAsset.availableQuantity + restoreQuantityByAssetCode[assetCode]
+          };
+        });
+
+        return applyRestoreStockUpdatesWithRollback(props.siteUrl, props.spHttpClient, stockUpdates).then(() => ({
+          latestAssets,
+          stockUpdates
+        }));
+      })
+      .then((payload: { latestAssets: IAssetItem[]; stockUpdates: IPreparedRestoreStockUpdate[] }) => {
+        return rollbackTransactionOrder({
+          siteUrl: props.siteUrl,
+          spHttpClient: props.spHttpClient,
+          orderId: orderDetail.orderCode
+        })
+          .then(() => payload)
+          .catch((error: Error) => {
+            const rollbackStockUpdates: IPreparedRestoreStockUpdate[] = payload.stockUpdates.map(
+              (stockUpdate: IPreparedRestoreStockUpdate): IPreparedRestoreStockUpdate => ({
+                ...stockUpdate,
+                previousStock: stockUpdate.nextStock,
+                nextStock: stockUpdate.previousStock
+              })
+            );
+
+            return applyRestoreStockUpdatesWithRollback(props.siteUrl, props.spHttpClient, rollbackStockUpdates).then(() => {
+              throw error;
+            });
+          });
+      })
+      .then((payload: { latestAssets: IAssetItem[]; stockUpdates: IPreparedRestoreStockUpdate[] }) => {
+        const restoredAssets: IAssetItem[] = payload.latestAssets.map((asset: IAssetItem) => {
+          const restoredQuantity: number = orderDetail.items
+            .filter((item: IOrderItem) => item.assetCode === asset.assetCode)
+            .reduce((sum: number, item: IOrderItem) => sum + item.quantity, 0);
+
+          if (!restoredQuantity) {
+            return asset;
+          }
+
+          const nextStock: number = asset.availableQuantity + restoredQuantity;
+
+          return {
+            ...asset,
+            totalQuantity: nextStock,
+            availableQuantity: nextStock,
+            statusText: nextStock > 0 ? 'Còn hàng' : 'Hết hàng'
+          };
+        });
+
+        setAssets(restoredAssets);
+        removeOrderFromState(orderDetail.orderId);
+        showToast('Đã xóa giao dịch và hoàn lại tồn kho thành công.', 'success');
+      })
+      .catch((error: Error) => {
+        // eslint-disable-next-line no-console
+        console.error('Không thể xóa giao dịch admin', error);
+        showToast('Không thể xóa giao dịch trên SharePoint.', 'error');
+      })
+      .then(() => {
+        endLoading();
+      })
+      .catch((): void => {
+        return;
+      });
+  }
+
+  function handleDeleteOrder(orderDetail: IOrderDetail): void {
+    handleDeleteOrderSafe(orderDetail);
+    return;
+
+    if (!hasAdminRole) {
+      return;
+    }
+
+    const shouldDelete: boolean = window.confirm(
+      'Xóa giao dịch ' + orderDetail.orderCode + '? Hệ thống sẽ hoàn lại tồn kho cho các sản phẩm trong đơn này.'
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    beginLoading('Đang xóa giao dịch...');
+
+    getAssetsFromSharePoint({
+      siteUrl: props.siteUrl,
+      listTitle: SHAREPOINT_LIST_TITLE,
+      spHttpClient: props.spHttpClient
+    })
+      .then((latestAssets: IAssetItem[]) => {
+        const nextStocksByAssetCode: Record<string, number> = {};
+
+        orderDetail.items.forEach((item: IOrderItem) => {
+          nextStocksByAssetCode[item.assetCode] = (nextStocksByAssetCode[item.assetCode] || 0) + item.quantity;
+        });
+
+        return Promise.all(
+          Object.keys(nextStocksByAssetCode).map((assetCode: string) => {
+            const latestAsset: IAssetItem | undefined = latestAssets.filter((asset: IAssetItem) => asset.assetCode === assetCode)[0];
+
+            if (!latestAsset) {
+              throw new Error('Không tìm thấy sản phẩm ' + assetCode + ' để hoàn tồn kho.');
+            }
+
+            return updateAssetStock({
+              siteUrl: props.siteUrl,
+              spHttpClient: props.spHttpClient,
+              assetItemId: latestAsset.id,
+              nextStock: latestAsset.availableQuantity + nextStocksByAssetCode[assetCode]
+            });
+          })
+        ).then(() => latestAssets);
+      })
+      .then((latestAssets: IAssetItem[]) => {
+        return rollbackTransactionOrder({
+          siteUrl: props.siteUrl,
+          spHttpClient: props.spHttpClient,
+          orderId: orderDetail.orderCode
+        }).then(() => latestAssets);
+      })
+      .then((latestAssets: IAssetItem[]) => {
+        const restoredAssets: IAssetItem[] = latestAssets.map((asset: IAssetItem) => {
+          const restoredQuantity: number = orderDetail.items
+            .filter((item: IOrderItem) => item.assetCode === asset.assetCode)
+            .reduce((sum: number, item: IOrderItem) => sum + item.quantity, 0);
+
+          if (!restoredQuantity) {
+            return asset;
+          }
+
+          const nextStock: number = asset.availableQuantity + restoredQuantity;
+
+          return {
+            ...asset,
+            totalQuantity: nextStock,
+            availableQuantity: nextStock,
+            statusText: nextStock > 0 ? 'Còn hàng' : 'Hết hàng'
+          };
+        });
+
+        setAssets(restoredAssets);
+        removeOrderFromState(orderDetail.orderId);
+        showToast('Đã xóa giao dịch và hoàn lại tồn kho thành công.', 'success');
+      })
+      .catch((error: Error) => {
+        // eslint-disable-next-line no-console
+        console.error('Không thể xóa giao dịch admin', error);
+        showToast('Không thể xóa giao dịch trên SharePoint.', 'error');
+      })
+      .then(() => {
+        endLoading();
+      })
+      .catch((): void => {
+        return;
+      });
   }
 
   function getOrderById(orderId: string): IOrderDetail | null {
@@ -424,6 +731,8 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       return;
     }
 
+    beginLoading('Đang xác nhận thanh toán...');
+
     updateOrderPaymentStatus({
       siteUrl: props.siteUrl,
       spHttpClient: props.spHttpClient,
@@ -445,7 +754,13 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console
         console.error('Không thể xác nhận thanh toán', error);
-        window.alert('Không thể xác nhận thanh toán trên SharePoint.');
+        showToast('Không thể xác nhận thanh toán trên SharePoint.', 'error');
+      })
+      .then((): void => {
+        endLoading();
+      })
+      .catch((): void => {
+        return;
       });
   }
 
@@ -460,6 +775,8 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       return;
     }
 
+    beginLoading('Đang xác nhận bàn giao...');
+
     updateTransactionStatus({
       siteUrl: props.siteUrl,
       spHttpClient: props.spHttpClient,
@@ -472,7 +789,13 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console
         console.error('Không thể xác nhận bàn giao', error);
-        window.alert('Không thể xác nhận bàn giao trên SharePoint.');
+        showToast('Không thể xác nhận bàn giao trên SharePoint.', 'error');
+      })
+      .then((): void => {
+        endLoading();
+      })
+      .catch((): void => {
+        return;
       });
   }
 
@@ -498,6 +821,7 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
 
   return (
     <div className={styles.workspace}>
+      {pendingApiCount > 0 && <FullscreenLoadingOverlay label={loadingLabel} />}
       <div className={styles.layout}>
         <aside className={styles.sidebar + ' ' + (isSidebarCollapsed ? styles.sidebarCollapsed : '')}>
           <div className={styles.sidebarHeader}>
@@ -652,12 +976,19 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
               isAdmin={hasAdminRole}
               onConfirmPayment={handleConfirmPayment}
               onConfirmHandover={handleConfirmHandover}
+              onDeleteOrder={(orderId: string): void => {
+                const targetOrder: IOrderDetail | null = getOrderById(orderId);
+
+                if (targetOrder) {
+                  handleDeleteOrder(targetOrder);
+                }
+              }}
               onBack={(): void => {
                 setSelectedOrderId(null);
               }}
             />
           ) : hasAdminRole && activeTab === 'admin' ? (
-            <AdminTransactionPage orders={adminOrders} onOpenOrder={openOrderDetail} />
+            <AdminTransactionPage orders={adminOrders} onOpenOrder={openOrderDetail} onDeleteOrder={handleDeleteOrder} />
           ) : (
             <OrderListPage orders={orders} onOpenOrder={openOrderDetail} />
           )}

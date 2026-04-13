@@ -13,6 +13,7 @@ export interface IOrderDetailPageProps {
   onBack?: () => void;
   onConfirmPayment?: (orderId: string) => void;
   onConfirmHandover?: (orderId: string) => void;
+  onDeleteOrder?: (orderId: string) => void;
 }
 
 export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElement {
@@ -90,6 +91,11 @@ export function OrderDetailPage(props: IOrderDetailPageProps): React.ReactElemen
             onConfirmHandover={function (): void {
               if (props.onConfirmHandover) {
                 props.onConfirmHandover(orderDetail.orderId);
+              }
+            }}
+            onDeleteOrder={function (): void {
+              if (props.onDeleteOrder) {
+                props.onDeleteOrder(orderDetail.orderId);
               }
             }}
           />

@@ -2,8 +2,10 @@ import * as React from 'react';
 import type { SPHttpClient } from '@microsoft/sp-http';
 import { AssetGrid } from './AssetGrid';
 import { FilterBar } from './FilterBar';
+import { FullscreenLoadingOverlay } from './FullscreenLoadingOverlay';
+import { useToast } from './ToastProvider';
 import type { IAssetFilters, IAssetItem, ICartItem } from './types';
-import { getAssetsFromSharePoint } from './services/assetCatalogService';
+import { getAssetByProductCodeFromSharePoint, getAssetsFromSharePoint } from './services/assetCatalogService';
 import type { IOrderDetail } from './orderDetail/types';
 import { getCartItemsByUser, upsertCartItem } from './services/cartService';
 import styles from './AssetLiquidationPage.module.scss';
@@ -132,6 +134,7 @@ function getActiveFilterChips(filters: IAssetFilters, searchValue: string, sortV
 
 export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.ReactElement {
   const displayName: string = props.userDisplayName || 'Người dùng nội bộ';
+  const { showToast } = useToast();
 
   React.useEffect(() => {
     // eslint-disable-next-line no-console
@@ -168,6 +171,11 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
     () => assets.filter((asset: IAssetItem) => asset.availableQuantity > 0 && asset.availableQuantity <= 3).length,
     [assets]
   );
+  const isAnyAssetSubmitting: boolean = React.useMemo(
+    () => Object.keys(submittingAssetIds).some((assetId: string) => !!submittingAssetIds[assetId]),
+    [submittingAssetIds]
+  );
+  const loadingOverlayLabel: string = isLoadingAssets ? 'Đang tải dữ liệu từ SharePoint...' : 'Đang cập nhật giỏ hàng...';
 
   const loadCartItems = React.useCallback(
     (assetSource: IAssetItem[]) => {
@@ -386,8 +394,62 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
     }));
   }, []);
 
+  const ensureLatestAssetCanBeAddedToCart = React.useCallback(
+    (asset: IAssetItem, quantity: number): Promise<IAssetItem> => {
+      return getAssetByProductCodeFromSharePoint({
+        siteUrl: props.siteUrl,
+        listTitle: SHAREPOINT_LIST_TITLE,
+        spHttpClient: props.spHttpClient,
+        productCode: asset.assetCode
+      }).then((latestAsset: IAssetItem | undefined) => {
+        if (!latestAsset) {
+          setAssets((prevAssets: IAssetItem[]) => prevAssets.filter((item: IAssetItem) => item.assetCode !== asset.assetCode));
+          setQuantityErrors((prevState) => ({
+            ...prevState,
+            [asset.id]: 'Sản phẩm không còn tồn tại hoặc đã ngừng mở bán.'
+          }));
+            showToast('Sản phẩm không còn tồn tại hoặc đã ngừng mở bán.', 'error');
+          throw new Error('Asset no longer exists.');
+        }
+
+        setAssets((prevAssets: IAssetItem[]) =>
+          prevAssets.map((item: IAssetItem) => (item.assetCode === latestAsset.assetCode ? latestAsset : item))
+        );
+
+        if (latestAsset.availableQuantity <= 0) {
+          setQuantityErrors((prevState) => ({
+            ...prevState,
+            [asset.id]: 'Sản phẩm đã hết hàng.'
+          }));
+            showToast('Sản phẩm đã hết hàng.', 'error');
+          throw new Error('Asset is sold out.');
+        }
+
+        if (quantity > latestAsset.availableQuantity) {
+          setQuantityInputs((prevState) => ({
+            ...prevState,
+            [asset.id]: String(latestAsset.availableQuantity)
+          }));
+          setQuantityErrors((prevState) => ({
+            ...prevState,
+            [asset.id]: 'Số lượng yêu cầu vượt quá tồn kho hiện tại.'
+          }));
+            showToast('Sản phẩm không còn đủ số lượng trong tồn kho. Vui lòng giảm số lượng.', 'error');
+          throw new Error('Insufficient latest stock.');
+        }
+
+        return latestAsset;
+      });
+    },
+    [props.siteUrl, props.spHttpClient]
+  );
+
   const handleAddToCart = React.useCallback(
     (asset: IAssetItem) => {
+      if (isAnyAssetSubmitting) {
+        return;
+      }
+
       const quantity: number = Number(quantityInputs[asset.id] || '0');
       const hasError: boolean = !!quantityErrors[asset.id];
       const currentCartItem: ICartItem | undefined = cartItems.filter((item: ICartItem) => item.productCode === asset.assetCode)[0];
@@ -407,21 +469,23 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
           ...prevState,
           [asset.id]: 'Tổng số lượng đăng ký đã vượt quá giới hạn còn lại.'
         }));
-        window.alert('Bạn đã đăng ký vượt quá giới hạn mua. Vui lòng giảm số lượng.');
+        showToast('Bạn đã đăng ký vượt quá giới hạn mua. Vui lòng giảm số lượng.', 'error');
         return;
       }
 
       setAssetSubmittingState(asset.id, true);
 
-      upsertCartItem({
-        siteUrl: props.siteUrl,
-        spHttpClient: props.spHttpClient,
-        buyerName: displayName,
-        buyerEmail: props.userEmail,
-        productCode: asset.assetCode,
-        quantity,
-        unitPrice: asset.price
-      })
+      ensureLatestAssetCanBeAddedToCart(asset, quantity).then((latestAsset: IAssetItem) =>
+        upsertCartItem({
+          siteUrl: props.siteUrl,
+          spHttpClient: props.spHttpClient,
+          buyerName: displayName,
+          buyerEmail: props.userEmail,
+          productCode: asset.assetCode,
+          quantity,
+          unitPrice: latestAsset.price
+        })
+      )
         .then(() => loadCartItems(assets))
         .then(() => {
           setQuantityInputs((prevState) => ({
@@ -434,9 +498,17 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
           }));
         })
         .catch((error: Error) => {
+          if (
+            error.message === 'Asset no longer exists.' ||
+            error.message === 'Asset is sold out.' ||
+            error.message === 'Insufficient latest stock.'
+          ) {
+            return;
+          }
+
           // eslint-disable-next-line no-console
           console.error('Không thể thêm vào giỏ hàng', error);
-          window.alert('Không thể thêm sản phẩm vào giỏ hàng trên SharePoint.');
+          showToast('Không thể thêm sản phẩm vào giỏ hàng trên SharePoint.', 'error');
         })
         .then(
           () => {
@@ -452,6 +524,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
       cartItems,
       cartQuantity,
       displayName,
+      ensureLatestAssetCanBeAddedToCart,
       loadCartItems,
       props.siteUrl,
       props.spHttpClient,
@@ -459,12 +532,15 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
       quantityErrors,
       quantityInputs,
       remainingLimit,
-      setAssetSubmittingState
+      isAnyAssetSubmitting,
+      setAssetSubmittingState,
+      showToast
     ]
   );
 
   return (
     <div className={styles.page}>
+      {(isLoadingAssets || isAnyAssetSubmitting) && <FullscreenLoadingOverlay label={loadingOverlayLabel} />}
       <section className={styles.hero}>
         <div className={styles.heroContent}>
           <div className={styles.heroEyebrow}>Nền tảng thanh lý tài sản nội bộ</div>
@@ -554,6 +630,7 @@ export function AssetLiquidationPage(props: IAssetLiquidationPageProps): React.R
             errors={quantityErrors}
             remainingLimit={remainingLimit}
             submittingAssetIds={submittingAssetIds}
+            isSubmissionLocked={isAnyAssetSubmitting}
             onQuantityChange={handleQuantityChange}
             onAddToCart={handleAddToCart}
           />

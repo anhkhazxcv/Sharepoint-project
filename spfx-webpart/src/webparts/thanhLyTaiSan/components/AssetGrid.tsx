@@ -9,12 +9,13 @@ export interface IAssetGridProps {
   errors: Record<string, string>;
   remainingLimit: number;
   submittingAssetIds?: Record<string, boolean>;
+  isSubmissionLocked?: boolean;
   onQuantityChange: (assetId: string, value: string) => void;
   onAddToCart: (asset: IAssetItem) => void;
 }
 
 export function AssetGrid(props: IAssetGridProps): React.ReactElement {
-  const { assets, quantityInputs, errors, remainingLimit, submittingAssetIds, onQuantityChange, onAddToCart } = props;
+  const { assets, quantityInputs, errors, remainingLimit, submittingAssetIds, isSubmissionLocked, onQuantityChange, onAddToCart } = props;
 
   if (!assets.length) {
     return (
@@ -35,6 +36,7 @@ export function AssetGrid(props: IAssetGridProps): React.ReactElement {
           errorMessage={errors[asset.id]}
           remainingLimit={remainingLimit}
           isSubmitting={!!(submittingAssetIds && submittingAssetIds[asset.id])}
+          isSubmissionLocked={isSubmissionLocked}
           onQuantityChange={onQuantityChange}
           onAddToCart={onAddToCart}
         />

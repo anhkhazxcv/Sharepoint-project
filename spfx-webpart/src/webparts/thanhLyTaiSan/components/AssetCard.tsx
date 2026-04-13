@@ -8,6 +8,7 @@ export interface IAssetCardProps {
   errorMessage?: string;
   remainingLimit: number;
   isSubmitting?: boolean;
+  isSubmissionLocked?: boolean;
   onQuantityChange: (assetId: string, value: string) => void;
   onAddToCart: (asset: IAssetItem) => void;
 }
@@ -45,7 +46,7 @@ function getStatusLabel(asset: IAssetItem): string {
 }
 
 export function AssetCard(props: IAssetCardProps): React.ReactElement {
-  const { asset, quantityValue, errorMessage, remainingLimit, isSubmitting, onQuantityChange, onAddToCart } = props;
+  const { asset, quantityValue, errorMessage, remainingLimit, isSubmitting, isSubmissionLocked, onQuantityChange, onAddToCart } = props;
   const [isImageBroken, setIsImageBroken] = React.useState<boolean>(false);
   const hasImage: boolean = !!asset.imageUrl;
   const statusVariant: 'soldOut' | 'lowStock' | 'available' = getStatusVariant(asset);
@@ -58,7 +59,7 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
     parsedQuantity > 0 &&
     parsedQuantity <= asset.availableQuantity &&
     parsedQuantity <= remainingLimit;
-  const isActionDisabled: boolean = isSoldOut || !hasValidQuantity || !!errorMessage || remainingLimit === 0 || !!isSubmitting;
+  const isActionDisabled: boolean = isSoldOut || !hasValidQuantity || !!errorMessage || remainingLimit === 0 || !!isSubmissionLocked;
 
   return (
     <article className={`${styles.card} ${isSoldOut ? styles.soldOutCard : ''}`}>
@@ -131,7 +132,7 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
               step={1}
               inputMode="numeric"
               value={isSoldOut ? '0' : quantityValue}
-              disabled={isSoldOut || remainingLimit === 0 || !!isSubmitting}
+              disabled={isSoldOut || remainingLimit === 0 || !!isSubmissionLocked}
               onChange={(event: React.ChangeEvent<HTMLInputElement>) => onQuantityChange(asset.id, event.target.value)}
             />
           </label>

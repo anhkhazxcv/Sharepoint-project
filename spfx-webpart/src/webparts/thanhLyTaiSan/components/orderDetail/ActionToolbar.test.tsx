@@ -18,6 +18,18 @@ describe('ActionToolbar', () => {
     container.remove();
   });
 
+  function findButtonByText(text: string): HTMLButtonElement | null {
+    const buttons: NodeListOf<HTMLButtonElement> = container.querySelectorAll('button');
+
+    for (let index = 0; index < buttons.length; index += 1) {
+      if (buttons[index].textContent === text) {
+        return buttons[index];
+      }
+    }
+
+    return null;
+  }
+
   it('hides payment confirmation for non-admin users', () => {
     act(() => {
       ReactDOM.render(
@@ -53,7 +65,8 @@ describe('ActionToolbar', () => {
       );
     });
 
-    const paymentButton = container.querySelector('button');
+    const paymentButton = findButtonByText('Xác nhận thanh toán');
+
     expect(paymentButton).not.toBeNull();
 
     act(() => {
@@ -78,9 +91,66 @@ describe('ActionToolbar', () => {
       );
     });
 
-    const handoverButton = container.querySelector('button') as HTMLButtonElement | null;
+    const handoverButton = findButtonByText('Xác nhận bàn giao');
 
     expect(handoverButton).not.toBeNull();
     expect(handoverButton!.disabled).toBe(true);
+  });
+
+  it('shows delete action only for admin orders that are unpaid and not handed over', () => {
+    act(() => {
+      ReactDOM.render(
+        <ActionToolbar
+          currentStep={'Thanh toán'}
+          paymentStatus={'Chờ xác nhận'}
+          handoverStatus={'Chưa bàn giao'}
+          isAdmin={true}
+          onConfirmPayment={jest.fn()}
+          onConfirmHandover={jest.fn()}
+          onDeleteOrder={jest.fn()}
+        />,
+        container
+      );
+    });
+
+    expect(container.textContent).toContain('Xóa giao dịch');
+  });
+
+  it('hides delete action after payment is confirmed', () => {
+    act(() => {
+      ReactDOM.render(
+        <ActionToolbar
+          currentStep={'Bàn giao'}
+          paymentStatus={'Đã thanh toán'}
+          handoverStatus={'Chưa bàn giao'}
+          isAdmin={true}
+          onConfirmPayment={jest.fn()}
+          onConfirmHandover={jest.fn()}
+          onDeleteOrder={jest.fn()}
+        />,
+        container
+      );
+    });
+
+    expect(container.textContent).not.toContain('Xóa giao dịch');
+  });
+
+  it('hides delete action after handover is confirmed', () => {
+    act(() => {
+      ReactDOM.render(
+        <ActionToolbar
+          currentStep={'Bàn giao'}
+          paymentStatus={'Chờ xác nhận'}
+          handoverStatus={'Đã bàn giao'}
+          isAdmin={true}
+          onConfirmPayment={jest.fn()}
+          onConfirmHandover={jest.fn()}
+          onDeleteOrder={jest.fn()}
+        />,
+        container
+      );
+    });
+
+    expect(container.textContent).not.toContain('Xóa giao dịch');
   });
 });

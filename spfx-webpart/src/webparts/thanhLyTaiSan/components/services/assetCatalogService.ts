@@ -9,7 +9,15 @@ export interface IAssetCatalogServiceOptions {
   spHttpClient: SPHttpClient;
 }
 
+export interface IAssetByProductCodeOptions extends IAssetCatalogServiceOptions {
+  productCode: string;
+}
+
 type TSharePointItem = Record<string, unknown>;
+
+function escapeODataValue(value: string): string {
+  return value.replace(/'/g, "''");
+}
 
 function getStringValue(item: TSharePointItem, candidates: string[], fallback: string = ''): string {
   for (let index: number = 0; index < candidates.length; index += 1) {
@@ -161,4 +169,35 @@ export async function getAssetsFromSharePoint(options: IAssetCatalogServiceOptio
   console.log('SharePoint lstSanPham mapped assets:', mappedItems);
 
   return mappedItems;
+}
+
+export async function getAssetByProductCodeFromSharePoint(options: IAssetByProductCodeOptions): Promise<IAssetItem | undefined> {
+  const requestUrl: string =
+    options.siteUrl.replace(/\/$/, '') +
+    "/_api/web/lists/getbytitle('" +
+    encodeURIComponent(options.listTitle) +
+    "')/items?$top=1&$filter=" +
+    encodeURIComponent("ProductCode eq '" + escapeODataValue(options.productCode) + "'");
+  const response: SPHttpClientResponse = await options.spHttpClient.get(
+    requestUrl,
+    SPHttpClient.configurations.v1,
+    {
+      headers: {
+        Accept: 'application/json;odata.metadata=none'
+      }
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('KhÃ´ng thá»ƒ táº£i tá»“n kho má»›i nháº¥t cá»§a sáº£n pháº©m tá»« SharePoint.');
+  }
+
+  const json: { value?: TSharePointItem[] } = (await response.json()) as { value?: TSharePointItem[] };
+  const items: TSharePointItem[] = Array.isArray(json.value) ? json.value : [];
+
+  if (!items.length) {
+    return undefined;
+  }
+
+  return mapItemToAsset(items[0], options.siteUrl);
 }

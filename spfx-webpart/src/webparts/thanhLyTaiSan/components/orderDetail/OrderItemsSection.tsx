@@ -12,6 +12,7 @@ export interface IOrderItemsSectionProps {
   isAdmin: boolean;
   onConfirmPayment: () => void;
   onConfirmHandover: () => void;
+  onDeleteOrder?: () => void;
 }
 
 export function OrderItemsSection(props: IOrderItemsSectionProps): React.ReactElement {
@@ -28,6 +29,7 @@ export function OrderItemsSection(props: IOrderItemsSectionProps): React.ReactEl
         isAdmin={props.isAdmin}
         onConfirmPayment={props.onConfirmPayment}
         onConfirmHandover={props.onConfirmHandover}
+        onDeleteOrder={props.onDeleteOrder}
       />
 
       <OrderItemsTable items={props.items} />

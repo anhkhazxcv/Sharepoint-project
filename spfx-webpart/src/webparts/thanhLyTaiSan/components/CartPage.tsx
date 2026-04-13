@@ -1,6 +1,8 @@
 import * as React from 'react';
 import type { SPHttpClient } from '@microsoft/sp-http';
 import { CartPanel } from './CartPanel';
+import { FullscreenLoadingOverlay } from './FullscreenLoadingOverlay';
+import { useToast } from './ToastProvider';
 import type { IAssetItem, ICartItem } from './types';
 import type { IOrderDetail } from './orderDetail/types';
 import { createOrderDetailFromCartItems } from './orderDetail/mockOrderDetail';
@@ -113,14 +115,17 @@ async function applyStockUpdatesWithRollback(
 
 export function CartPage(props: ICartPageProps): React.ReactElement {
   const displayName: string = props.userDisplayName || '';
+  const { showToast } = useToast();
   const [assets, setAssets] = React.useState<IAssetItem[]>([]);
   const [cartItems, setCartItems] = React.useState<ICartItem[]>([]);
   const [selectedCartProductCodes, setSelectedCartProductCodes] = React.useState<string[]>([]);
   const [isCheckingOut, setIsCheckingOut] = React.useState<boolean>(false);
   const [isLoading, setIsLoading] = React.useState<boolean>(true);
+  const [isMutatingCart, setIsMutatingCart] = React.useState<boolean>(false);
   const [loadError, setLoadError] = React.useState<string>('');
   const remainingLimit: number = Math.max(PURCHASE_LIMIT - props.purchasedCount, 0);
   const cartQuantity: number = cartItems.reduce((sum: number, item: ICartItem) => sum + item.quantity, 0);
+  const loadingOverlayLabel: string = isLoading ? 'Đang tải giỏ hàng...' : isCheckingOut ? 'Đang tạo đơn hàng...' : 'Đang cập nhật giỏ hàng...';
 
   const loadCartItems = React.useCallback(
     (assetSource: IAssetItem[]) => {
@@ -199,15 +204,17 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
       const maxAvailableForItem: number = Math.max(remainingLimit - otherQuantity, 0);
 
       if (maxAvailableForItem < 1) {
-        window.alert('Bạn đã đạt giới hạn mua tối đa.');
+        showToast('Bạn đã đạt giới hạn mua tối đa.', 'error');
         return;
       }
 
       if (sanitizedQuantity > maxAvailableForItem) {
-        window.alert('Bạn đã đăng ký vượt quá giới hạn mua. Vui lòng giảm số lượng.');
+        showToast('Bạn đã đăng ký vượt quá giới hạn mua. Vui lòng giảm số lượng.', 'error');
       }
 
       const allowedQuantity: number = Math.min(sanitizedQuantity, maxAvailableForItem);
+
+      setIsMutatingCart(true);
 
       upsertCartItem({
         siteUrl: props.siteUrl,
@@ -222,14 +229,24 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
         .catch((error: Error) => {
           // eslint-disable-next-line no-console
           console.error('Không thể cập nhật giỏ hàng', error);
-          window.alert('Không thể cập nhật giỏ hàng trên SharePoint.');
-        });
+          showToast('Không thể cập nhật giỏ hàng trên SharePoint.', 'error');
+        })
+        .then(
+          () => {
+            setIsMutatingCart(false);
+          },
+          () => {
+            setIsMutatingCart(false);
+          }
+        );
     },
-    [assets, cartItems, cartQuantity, displayName, loadCartItems, props.siteUrl, props.spHttpClient, props.userEmail, remainingLimit]
+    [assets, cartItems, cartQuantity, displayName, loadCartItems, props.siteUrl, props.spHttpClient, props.userEmail, remainingLimit, showToast]
   );
 
   const handleRemoveCartItem = React.useCallback(
     (productCode: string) => {
+      setIsMutatingCart(true);
+
       clearCartItems({
         siteUrl: props.siteUrl,
         spHttpClient: props.spHttpClient,
@@ -240,17 +257,25 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
         .catch((error: Error) => {
           // eslint-disable-next-line no-console
           console.error('Không thể xóa khỏi giỏ hàng', error);
-          window.alert('Không thể xóa sản phẩm khỏi giỏ hàng trên SharePoint.');
-        });
+          showToast('Không thể xóa sản phẩm khỏi giỏ hàng trên SharePoint.', 'error');
+        })
+        .then(
+          () => {
+            setIsMutatingCart(false);
+          },
+          () => {
+            setIsMutatingCart(false);
+          }
+        );
     },
-    [assets, loadCartItems, props.siteUrl, props.spHttpClient, props.userEmail]
+    [assets, loadCartItems, props.siteUrl, props.spHttpClient, props.userEmail, showToast]
   );
 
   const handleCheckoutSelected = React.useCallback(() => {
     const selectedItems: ICartItem[] = cartItems.filter((item: ICartItem) => selectedCartProductCodes.indexOf(item.productCode) >= 0);
 
     if (!selectedItems.length) {
-      window.alert('Vui lòng chọn ít nhất một sản phẩm trong giỏ hàng.');
+      showToast('Vui lòng chọn ít nhất một sản phẩm trong giỏ hàng.', 'error');
       return;
     }
 
@@ -280,7 +305,7 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
         if (unavailableItems.length) {
           const unavailableNames: string = unavailableItems.map((item: ICartItem) => item.assetName).join(', ');
           setAssets(latestAssets);
-          window.alert('Sản phẩm không còn đủ số lượng để tạo đơn: ' + unavailableNames + '. Vui lòng chọn sản phẩm khác.');
+          showToast('Sản phẩm không còn đủ số lượng để tạo đơn: ' + unavailableNames + '. Vui lòng chọn sản phẩm khác.', 'error');
           throw new Error('Insufficient stock for selected items.');
         }
 
@@ -339,9 +364,7 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
       .then((createdOrder: IOrderDetail) => {
         setSelectedCartProductCodes([]);
 
-        if (typeof window !== 'undefined' && window.alert) {
-          window.alert('Tạo đơn hàng thành công. Mã đơn hàng: ' + createdOrder.orderCode);
-        }
+        showToast('Tạo đơn hàng thành công. Mã đơn hàng: ' + createdOrder.orderCode, 'success');
 
         if (props.onPurchaseSuccess) {
           props.onPurchaseSuccess(createdOrder);
@@ -355,7 +378,7 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
           return;
         }
 
-        window.alert('Không thể tạo đơn mua trên SharePoint. Nếu hệ thống đã tạo đơn nhưng trừ tồn thất bại, đơn đã được hoàn tác tự động.');
+        showToast('Không thể tạo đơn mua trên SharePoint. Nếu hệ thống đã tạo đơn nhưng trừ tồn thất bại, đơn đã được hoàn tác tự động.', 'error');
       })
       .then(
         () => {
@@ -365,10 +388,11 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
           setIsCheckingOut(false);
         }
       );
-  }, [cartItems, displayName, loadCartItems, props, selectedCartProductCodes]);
+  }, [cartItems, displayName, loadCartItems, props, selectedCartProductCodes, showToast]);
 
   return (
     <div className={styles.page}>
+      {(isLoading || isCheckingOut || isMutatingCart) && <FullscreenLoadingOverlay label={loadingOverlayLabel} />}
       <div className={styles.header}>
         <div>
           <strong className={styles.title}>Quản lý giỏ hàng</strong>

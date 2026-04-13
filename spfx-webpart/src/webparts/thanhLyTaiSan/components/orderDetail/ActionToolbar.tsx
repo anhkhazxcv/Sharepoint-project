@@ -9,12 +9,18 @@ export interface IActionToolbarProps {
   isAdmin: boolean;
   onConfirmPayment: () => void;
   onConfirmHandover: () => void;
+  onDeleteOrder?: () => void;
 }
 
 export function ActionToolbar(props: IActionToolbarProps): React.ReactElement {
   const isPaymentStep: boolean = props.isAdmin && props.currentStep === 'Thanh toán';
   const canShowHandoverButton: boolean = props.isAdmin && props.paymentStatus === 'Đã thanh toán';
   const isHandoverDisabled: boolean = props.handoverStatus === 'Đã bàn giao';
+  const canDeleteOrder: boolean =
+    props.isAdmin &&
+    !!props.onDeleteOrder &&
+    props.paymentStatus !== 'Đã thanh toán' &&
+    props.handoverStatus !== 'Đã bàn giao';
 
   return (
     <div className={styles.toolbar}>
@@ -31,6 +37,11 @@ export function ActionToolbar(props: IActionToolbarProps): React.ReactElement {
           disabled={isHandoverDisabled}
         >
           Xác nhận bàn giao
+        </button>
+      )}
+      {canDeleteOrder && (
+        <button type="button" className={styles.secondaryButton} onClick={props.onDeleteOrder}>
+          Xóa giao dịch
         </button>
       )}
     </div>

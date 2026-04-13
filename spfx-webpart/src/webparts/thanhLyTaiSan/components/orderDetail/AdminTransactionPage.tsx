@@ -6,6 +6,7 @@ import styles from './AdminTransactionPage.module.scss';
 export interface IAdminTransactionPageProps {
   orders: IOrderDetail[];
   onOpenOrder: (order: IOrderDetail) => void;
+  onDeleteOrder: (order: IOrderDetail) => void;
 }
 
 function normalizeValue(value: string): string {
@@ -157,6 +158,11 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
                       <button type="button" className={styles.linkButton} onClick={(): void => props.onOpenOrder(order)}>
                         Xem chi tiết
                       </button>
+                      {order.paymentStatus !== 'Đã thanh toán' && order.handoverStatus !== 'Đã bàn giao' && (
+                        <button type="button" className={styles.linkButton} onClick={(): void => props.onDeleteOrder(order)}>
+                          Xóa đơn
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -172,6 +178,11 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
                   <button type="button" className={styles.linkButton} onClick={(): void => props.onOpenOrder(order)}>
                     Xem chi tiết
                   </button>
+                  {order.paymentStatus !== 'Đã thanh toán' && order.handoverStatus !== 'Đã bàn giao' && (
+                    <button type="button" className={styles.linkButton} onClick={(): void => props.onDeleteOrder(order)}>
+                      Xóa đơn
+                    </button>
+                  )}
                 </div>
 
                 <div className={styles.mobileRow}>
