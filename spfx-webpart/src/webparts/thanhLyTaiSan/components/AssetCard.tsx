@@ -142,7 +142,16 @@ export function AssetCard(props: IAssetCardProps): React.ReactElement {
             disabled={isActionDisabled}
             onClick={() => onAddToCart(asset)}
           >
-            {isSoldOut ? 'Hết hàng' : isSubmitting ? 'Đang thêm...' : 'Đăng ký mua'}
+            {isSoldOut ? (
+              'Hết hàng'
+            ) : isSubmitting ? (
+              <span className={styles.loadingContent}>
+                <span className={styles.loadingSpinner} aria-hidden="true" />
+                Đang thêm...
+              </span>
+            ) : (
+              'Đăng ký mua'
+            )}
           </button>
         </div>
 

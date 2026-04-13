@@ -255,6 +255,22 @@
   white-space: nowrap;
 }
 
+.loadingContent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.loadingSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
 .actionActive {
   background: linear-gradient(180deg, #7a5528 0%, #5e3f1b 100%);
   color: #ffffff;
@@ -282,6 +298,12 @@
 .errorText {
   color: #c0392b;
   font-weight: 700;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 640px) {
