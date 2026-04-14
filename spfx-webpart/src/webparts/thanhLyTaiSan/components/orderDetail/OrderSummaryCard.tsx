@@ -16,7 +16,7 @@ export function OrderSummaryCard(props: IOrderSummaryCardProps): React.ReactElem
         <strong className={styles.value}>{props.buyerName}</strong>
       </div>
       <div className={styles.item}>
-        <span className={styles.label}>Ngày mua</span>
+        <span className={styles.label}>Ngày giờ mua</span>
         <strong className={styles.value}>{formatDate(props.purchaseDate)}</strong>
       </div>
       <div className={styles.item}>

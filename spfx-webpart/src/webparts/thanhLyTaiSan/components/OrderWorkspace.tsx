@@ -23,6 +23,7 @@ import {
   updateTransactionStatus
 } from './services/orderTransactionService';
 import { buildVietQrImageUrl, getBankInfoFromSharePoint, type IBankInfoRecord } from './services/bankInfoService';
+import { sendOrderNotificationEmail } from './services/notificationService';
 import { isUserAdmin } from './services/roleService';
 import styles from './OrderWorkspace.module.scss';
 
@@ -747,9 +748,19 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
           status: 'Chờ bàn giao'
         });
       })
-      .then((): void => {
+      .then((): Promise<void> => {
         updatePaymentStatusInState(orderId, 'Đã thanh toán');
         updateTransactionStatusInState(orderId, 'Chờ bàn giao');
+
+        return sendOrderNotificationEmail(targetOrder.buyerEmail || '', 'XacNhanThanhToan', targetOrder)
+          .then((): void => {
+            showToast('Đã xác nhận thanh toán và gửi email thông báo.', 'success');
+          })
+          .catch((error: Error): void => {
+            // eslint-disable-next-line no-console
+            console.error('Không thể gửi email xác nhận thanh toán', error);
+            showToast('Đã xác nhận thanh toán nhưng gửi email thất bại.', 'error');
+          });
       })
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console
@@ -783,8 +794,18 @@ export function OrderWorkspace(props: IOrderWorkspaceProps): React.ReactElement 
       orderId: targetOrder.orderCode,
       status: 'Đã bàn giao'
     })
-      .then((): void => {
+      .then((): Promise<void> => {
         updateTransactionStatusInState(orderId, 'Đã bàn giao');
+
+        return sendOrderNotificationEmail(targetOrder.buyerEmail || '', 'XacNhanBanGiao', targetOrder)
+          .then((): void => {
+            showToast('Đã xác nhận bàn giao và gửi email thông báo.', 'success');
+          })
+          .catch((error: Error): void => {
+            // eslint-disable-next-line no-console
+            console.error('Không thể gửi email xác nhận bàn giao', error);
+            showToast('Đã xác nhận bàn giao nhưng gửi email thất bại.', 'error');
+          });
       })
       .catch((error: Error): void => {
         // eslint-disable-next-line no-console

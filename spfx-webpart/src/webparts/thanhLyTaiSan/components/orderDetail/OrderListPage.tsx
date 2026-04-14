@@ -49,7 +49,7 @@ export function OrderListPage(props: IOrderListPageProps): React.ReactElement {
             <tr>
               <th>Mã đơn</th>
               <th>Người mua</th>
-              <th>Ngày mua</th>
+              <th>Ngày giờ mua</th>
               <th>Tổng tiền</th>
               <th>Thanh toán</th>
               <th>Bàn giao</th>
@@ -104,7 +104,7 @@ export function OrderListPage(props: IOrderListPageProps): React.ReactElement {
                 <strong>{order.buyerName}</strong>
               </div>
               <div className={styles.mobileRow}>
-                <span className={styles.mobileLabel}>Ngày mua</span>
+                <span className={styles.mobileLabel}>Ngày giờ mua</span>
                 <strong>{formatDate(order.purchaseDate)}</strong>
               </div>
               <div className={styles.mobileRow}>

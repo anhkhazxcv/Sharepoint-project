@@ -133,7 +133,7 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
                   <th>Mã đơn</th>
                   <th>Người mua</th>
                   <th>Email</th>
-                  <th>Ngày mua</th>
+                  <th>Ngày giờ mua</th>
                   <th>Tổng tiền</th>
                   <th>Thanh toán</th>
                   <th>Bàn giao</th>
@@ -194,7 +194,7 @@ export function AdminTransactionPage(props: IAdminTransactionPageProps): React.R
                   <strong className={styles.emailCell}>{order.buyerEmail || '-'}</strong>
                 </div>
                 <div className={styles.mobileRow}>
-                  <span className={styles.mobileLabel}>Ngày mua</span>
+                  <span className={styles.mobileLabel}>Ngày giờ mua</span>
                   <strong>{formatDate(order.purchaseDate)}</strong>
                 </div>
                 <div className={styles.mobileRow}>
