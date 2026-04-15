@@ -7,6 +7,7 @@ export interface ICartPanelProps {
   selectedProductCodes: string[];
   maxSelectableQuantity: number;
   isCheckingOut: boolean;
+  onToggleAllSelection: (checked: boolean) => void;
   onToggleSelection: (productCode: string, checked: boolean) => void;
   onQuantityChange: (productCode: string, quantity: number) => void;
   onRemove: (productCode: string) => void;
@@ -25,14 +26,34 @@ export function CartPanel(props: ICartPanelProps): React.ReactElement {
   const selectedItems: ICartItem[] = props.items.filter((item: ICartItem) => props.selectedProductCodes.indexOf(item.productCode) >= 0);
   const selectedQuantity: number = selectedItems.reduce((sum: number, item: ICartItem) => sum + item.quantity, 0);
   const selectedAmount: number = selectedItems.reduce((sum: number, item: ICartItem) => sum + item.lineTotal, 0);
+  const selectAllRef = React.useRef<HTMLInputElement | null>(null);
+  const isAllSelected: boolean = !!props.items.length && props.selectedProductCodes.length === props.items.length;
+  const isPartiallySelected: boolean = props.selectedProductCodes.length > 0 && !isAllSelected;
+
+  React.useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = isPartiallySelected;
+    }
+  }, [isPartiallySelected]);
 
   return (
     <section className={styles.panel}>
       <div className={styles.header}>
-        <div>
+        <div className={styles.headerMain}>
           <strong className={styles.title}>Giỏ hàng</strong>
           <span className={styles.subtitle}>Chọn sản phẩm, cập nhật số lượng hoặc xóa khỏi giỏ trước khi tạo đơn.</span>
         </div>
+        {!!props.items.length && (
+          <label className={styles.selectAll}>
+            <input
+              ref={selectAllRef}
+              type="checkbox"
+              checked={isAllSelected}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => props.onToggleAllSelection(event.target.checked)}
+            />
+            <span>Chọn tất cả</span>
+          </label>
+        )}
         <div className={styles.summary}>
           <span>{props.items.length} sản phẩm</span>
           <span>{selectedQuantity}/{props.maxSelectableQuantity} số lượng đã chọn</span>

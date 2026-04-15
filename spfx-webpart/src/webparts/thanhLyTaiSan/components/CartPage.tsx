@@ -191,6 +191,10 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
     });
   }, []);
 
+  const handleToggleAllCartSelection = React.useCallback((checked: boolean) => {
+    setSelectedCartProductCodes(checked ? cartItems.map((item: ICartItem) => item.productCode) : []);
+  }, [cartItems]);
+
   const handleCartQuantityChange = React.useCallback(
     (productCode: string, quantity: number) => {
       const cartItem: ICartItem | undefined = cartItems.filter((item: ICartItem) => item.productCode === productCode)[0];
@@ -410,6 +414,7 @@ export function CartPage(props: ICartPageProps): React.ReactElement {
           selectedProductCodes={selectedCartProductCodes}
           maxSelectableQuantity={remainingLimit}
           isCheckingOut={isCheckingOut}
+          onToggleAllSelection={handleToggleAllCartSelection}
           onToggleSelection={handleToggleCartSelection}
           onQuantityChange={handleCartQuantityChange}
           onRemove={handleRemoveCartItem}

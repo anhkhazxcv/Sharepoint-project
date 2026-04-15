@@ -12,6 +12,11 @@
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 14px;
+  align-items: flex-start;
+}
+
+.headerMain {
+  flex: 1;
 }
 
 .title {
@@ -34,6 +39,24 @@
   gap: 4px;
   font-size: 13px;
   color: #5a5044;
+}
+
+.selectAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 8px 12px;
+  border: 1px solid #eadfce;
+  border-radius: 999px;
+  background: #f9f4eb;
+  color: #5a5044;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.selectAll input {
+  margin: 0;
 }
 
 .emptyState {
@@ -162,5 +185,9 @@
   .summary,
   .priceCol {
     align-items: flex-start;
+  }
+
+  .selectAll {
+    margin-left: 0;
   }
 }
