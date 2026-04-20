@@ -133,6 +133,29 @@ async function getListItemByFilter(
   };
 }
 
+async function getCartDetailItemByFilter(
+  siteUrl: string,
+  spHttpClient: SPHttpClient,
+  filterQuery: string
+): Promise<{ Id: number; quantity: number } | undefined> {
+  const items: TSharePointItem[] = await getListItems(
+    siteUrl,
+    spHttpClient,
+    CART_DETAIL_LIST_TITLE,
+    ['Id', 'Quantity'],
+    filterQuery
+  );
+
+  if (!items.length) {
+    return undefined;
+  }
+
+  return {
+    Id: getNumberValue(items[0], ['Id'], 0),
+    quantity: getNumberValue(items[0], ['Quantity'], 0)
+  };
+}
+
 async function updateListItemById(
   siteUrl: string,
   spHttpClient: SPHttpClient,
@@ -299,13 +322,14 @@ export async function upsertCartItem(options: {
     "' and ProductCode eq '" +
     escapeODataValue(options.productCode) +
     "'";
-  const existingItem = await getListItemByFilter(options.siteUrl, options.spHttpClient, CART_DETAIL_LIST_TITLE, filterQuery);
+  const existingItem = await getCartDetailItemByFilter(options.siteUrl, options.spHttpClient, filterQuery);
+  const nextQuantity: number = existingItem ? existingItem.quantity + options.quantity : options.quantity;
   const payload = {
     CartId: cartId,
     ProductCode: options.productCode,
-    Quantity: options.quantity,
+    Quantity: nextQuantity,
     UnitPrice: options.unitPrice,
-    LineTotal: options.quantity * options.unitPrice
+    LineTotal: nextQuantity * options.unitPrice
   };
 
   if (existingItem) {
